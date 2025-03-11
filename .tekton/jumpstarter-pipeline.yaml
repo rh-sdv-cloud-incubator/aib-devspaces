@@ -1,0 +1,72 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: provision-pipeline
+spec:
+  finally:
+    - name: release-lease
+      params:
+        - name: jmp-lease-id
+          value: $(tasks.get-lease.results.jmp-lease-id)
+        - name: client-name
+          value: $(params.client-name)
+      taskRef:
+        kind: Task
+        name: jumpstarter-release-lease
+      workspaces:
+        - name: jumpstarter-client-secret
+          workspace: jumpstarter-client-secret
+  params:
+    - name: hw-target
+      type: string
+      default: j784s4evm
+    - description: A list of label exporters in the format key=value
+      name: exporter-labels
+      type: array
+    - name: image
+      description: OS image to provision with
+      type: string
+    - description: Jumpstarter client name to use
+      name: client-name
+      type: string
+      default: "default"
+  tasks:
+    - name: get-lease
+      params:
+        - name: client-name
+          value: $(params.client-name)
+        - name: exporter-labels
+          value: ["$(params.exporter-labels[*])"]
+      taskRef:
+        kind: Task
+        name: jumpstarter-get-lease
+      workspaces:
+        - name: jumpstarter-client-secret
+          workspace: jumpstarter-client-secret
+
+    - name: provision-ti
+      when:
+        - input: "$(params.hw-target)"
+          operator: in
+          values: ["j784s4evm"]
+      params:
+        - name: client-name
+          value: $(params.client-name)
+        - name: jmp-lease-id
+          value: $(tasks.get-lease.results.jmp-lease-id)
+        - name: image
+          value: $(params.image)
+      runAfter:
+        - get-lease
+      taskRef:
+        kind: Task
+        name: jumpstarter-provision-board-ti
+      workspaces:
+        - name: jumpstarter-client-secret
+          workspace: jumpstarter-client-secret
+        - name: shared-workspace
+          workspace: shared-workspace
+
+  workspaces:
+    - name: jumpstarter-client-secret
+    - name: shared-workspace

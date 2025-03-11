@@ -1,0 +1,43 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: prepare-manifest
+spec:
+  params:
+    - name: name
+      description: Name for the optional ConfigMap to create
+      type: string
+      default: "automotive-manifest-config"
+    - name: namespace
+      description: Namespace where to create the ConfigMap
+      type: string
+  workspaces:
+    - name: source
+      description: Contains the cloned repo with manifest files
+    - name: manifest-config-workspace
+      description: Workspace where to copy the manifest file
+  steps:
+    - name: prepare-manifest
+      image: quay.io/jumpstarter-dev/jumpstarter-utils:latest
+      script: |
+        #!/usr/bin/env bash
+        set -ex
+
+        echo "Contents of source workspace:"
+        ls -la $(workspaces.source.path)
+
+        MANIFEST_FILE="$(workspaces.source.path)/cont.aib.yml"
+
+        if [ ! -f "$MANIFEST_FILE" ]; then
+          echo "ERROR: cont.aib.yml not found at $MANIFEST_FILE"
+          echo "Searching for it in workspace..."
+          find $(workspaces.source.path) -name "cont.aib.yml"
+          exit 1
+        fi
+
+        echo "Found manifest file: $MANIFEST_FILE"
+
+        cp "$MANIFEST_FILE" "$(workspaces.manifest-config-workspace.path)/cont.aib.yml"
+
+        echo "Manifest file copied to workspace. Contents:"
+        ls -la $(workspaces.manifest-config-workspace.path)

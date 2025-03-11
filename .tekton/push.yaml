@@ -1,0 +1,226 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+    name: aib-devspaces-push
+    annotations:
+        pipelinesascode.tekton.dev/on-event: "[push]"
+        pipelinesascode.tekton.dev/on-target-branch: "[main]"
+        pipelinesascode.tekton.dev/max-keep-runs: "5"
+        pipelinesascode.tekton.dev/task-0: ".tekton/tasks/prepare-manifest.yaml"
+        pipelinesascode.tekton.dev/task-1: ".tekton/tasks/get-lease.yaml"
+        pipelinesascode.tekton.dev/task-2: ".tekton/tasks/release-lease.yaml"
+        pipelinesascode.tekton.dev/task-3: ".tekton/tasks/provision-ti.yaml"
+spec:
+    pipelineSpec:
+        params:
+            - name: repo_url
+              type: string
+            - name: revision
+              type: string
+            - name: name
+              type: string
+              default: "container"
+            - name: arch
+              type: string
+              default: "arm64"
+            - name: target
+              type: string
+              default: "j784s4evm"
+            - name: distro
+              type: string
+              default: "autosd"
+            - name: client-name
+              type: string
+              default: "default"
+            - name: exporter-labels
+              type: array
+              description: A list of label exporters in the format key=value
+            - name: namespace
+              description: Target namespace for the build
+              type: string
+            - name: mode
+              type: string
+              default: "development"
+            - name: export-format
+              type: string
+              default: "raw"
+            - name: automotive-osbuild-image
+              type: string
+              default: "quay.io/centos-sig-automotive/automotive-osbuild:latest"
+            - name: operator-namespace
+              type: string
+              default: "automotive-dev-operator-system"
+        workspaces:
+            - name: source
+            - name: shared-workspace
+            - name: jumpstarter-client-secret
+            - name: manifest-config-workspace
+
+        tasks:
+            - name: git-clone
+              taskRef:
+                  resolver: cluster
+                  params:
+                      - name: kind
+                        value: task
+                      - name: name
+                        value: git-clone
+                      - name: namespace
+                        value: openshift-pipelines
+              params:
+                  - name: URL
+                    value: $(params.repo_url)
+                  - name: revision
+                    value: $(params.revision)
+                  - name: depth
+                    value: "1"
+              workspaces:
+                  - name: output
+                    workspace: source
+
+            - name: prepare-manifest
+              runAfter: ["git-clone"]
+              taskRef:
+                  kind: Task
+                  name: prepare-manifest
+              workspaces:
+                  - name: source
+                    workspace: source
+                  - name: manifest-config-workspace
+                    workspace: manifest-config-workspace
+              params:
+                  - name: namespace
+                    value: $(params.namespace)
+
+            - name: build-image
+              runAfter: ["prepare-manifest"]
+              taskRef:
+                  resolver: cluster
+                  params:
+                      - name: kind
+                        value: task
+                      - name: name
+                        value: build-automotive-image
+                      - name: namespace
+                        value: automotive-dev-operator-system
+              params:
+                  - name: target-architecture
+                    value: $(params.arch)
+                  - name: distro
+                    value: $(params.distro)
+                  - name: target
+                    value: $(params.target)
+                  - name: mode
+                    value: $(params.mode)
+                  - name: export-format
+                    value: $(params.export-format)
+                  - name: automotive-osbuild-image
+                    value: $(params.automotive-osbuild-image)
+              workspaces:
+                  - name: shared-workspace
+                    workspace: shared-workspace
+                  - name: manifest-config-workspace
+                    workspace: manifest-config-workspace
+
+            - name: get-lease
+              runAfter: ["build-image"]
+              taskRef:
+                  kind: Task
+                  name: jumpstarter-get-lease
+              params:
+                  - name: client-name
+                    value: $(params.client-name)
+                  - name: exporter-labels
+                    value: ["$(params.exporter-labels[*])"]
+              workspaces:
+                  - name: jumpstarter-client-secret
+                    workspace: jumpstarter-client-secret
+
+            - name: provision-ti
+              runAfter: ["get-lease"]
+              taskRef:
+                  kind: Task
+                  name: jumpstarter-provision-board-ti
+              params:
+                  - name: client-name
+                    value: $(params.client-name)
+                  - name: jmp-lease-id
+                    value: $(tasks.get-lease.results.jmp-lease-id)
+                  - name: image
+                    value: /workspace/$(params.distro)-$(params.target).raw
+              workspaces:
+                  - name: jumpstarter-client-secret
+                    workspace: jumpstarter-client-secret
+                  - name: shared-workspace
+                    workspace: shared-workspace
+
+        finally:
+            - name: release-lease
+              params:
+                  - name: jmp-lease-id
+                    value: $(tasks.get-lease.results.jmp-lease-id)
+                  - name: client-name
+                    value: $(params.client-name)
+              taskRef:
+                  kind: Task
+                  name: jumpstarter-release-lease
+              workspaces:
+                  - name: jumpstarter-client-secret
+                    workspace: jumpstarter-client-secret
+
+    params:
+        - name: repo_url
+          value: "{{ repo_url }}"
+        - name: revision
+          value: "{{ revision }}"
+        - name: name
+          value: "container"
+        - name: arch
+          value: "arm64"
+        - name: target
+          value: "j784s4evm"
+        - name: distro
+          value: "autosd"
+        - name: client-name
+          value: "default"
+        - name: exporter-labels
+          value:
+              - "board-type=j784s4evm"
+        - name: namespace
+          value: "{{ target_namespace }}"
+        - name: mode
+          value: "image"
+        - name: export-format
+          value: "image"
+        - name: automotive-osbuild-image
+          value: "quay.io/centos-sig-automotive/automotive-osbuild:latest"
+        - name: operator-namespace
+          value: "automotive-dev-operator-system"
+    workspaces:
+        - name: source
+          volumeClaimTemplate:
+              spec:
+                  accessModes:
+                      - ReadWriteOnce
+                  resources:
+                      requests:
+                          storage: 1Gi
+        - name: shared-workspace
+          volumeClaimTemplate:
+              spec:
+                  accessModes:
+                      - ReadWriteOnce
+                  resources:
+                      requests:
+                          storage: 10Gi
+        - name: jumpstarter-client-secret
+          secret:
+              secretName: jumpstarter-client
+        - name: manifest-config-workspace
+          volumeClaimTemplate:
+              spec:
+                  accessModes:
+                      - ReadWriteOnce
+                  resources:
+                      requests:
+                          storage: 1Gi

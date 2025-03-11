@@ -1,0 +1,160 @@
+schemaVersion: 2.3.0
+metadata:
+    name: aib-devspaces
+    tags:
+        - Jumpstarter
+        - Automotive
+    language: C
+projects:
+    - name: aib-devspace
+      git:
+          remotes:
+              origin: https://gitlab.com/rh-sdv-cloud-incubator/aib-devspaces.git
+components:
+    - name: runtime
+      container:
+          image: quay.io/bzlotnik/aib-base-dev:latest-arm64
+          mountSources: true
+          args: ["tail", "-f", "/dev/null"]
+          volumeMounts:
+              - name: artifacts-volume
+                path: /workspace/artifacts
+
+    - name: artifact-server
+      container:
+          image: quay.io/nginx/nginx-unprivileged:alpine
+          mountSources: false
+          memoryLimit: 128Mi
+          cpuLimit: "0.5"
+          volumeMounts:
+              - name: artifacts-volume
+                path: /usr/share/nginx/html
+          endpoints:
+              - name: artifacts
+                targetPort: 8080
+                exposure: public
+                protocol: http
+
+    - name: artifacts-volume
+      volume:
+          size: 1Gi
+
+commands:
+    - id: build
+      exec:
+          component: runtime
+          commandLine: make all
+          workingDir: ${PROJECT_SOURCE}
+
+    - id: clean
+      exec:
+          component: runtime
+          commandLine: make clean
+          workingDir: ${PROJECT_SOURCE}
+
+    - id: run
+      exec:
+          component: runtime
+          commandLine: ./build/hello
+          workingDir: ${PROJECT_SOURCE}
+
+    - id: build-image-ti
+      exec:
+          component: runtime
+          commandLine: |
+              NAME=${NAME:-hello}
+              NAMESPACE=${NAMESPACE:-$(oc project -q)}
+              ARCH=${ARCH:-arm64}
+              FORMAT=${FORMAT:-image}
+              TARGET=${TARGET:-j784s4evm}
+              DISTRO=${DISTRO:-autosd}
+
+              MANIFEST_FILE="${NAME}.aib.yml"
+
+              caib --kubeconfig $KUBECONFIG build \
+                -n ${NAMESPACE} \
+                --name ${NAME} \
+                --manifest ${MANIFEST_FILE} \
+                --arch ${ARCH} \
+                --distro ${DISTRO} \
+                --export-format ${FORMAT} \
+                --target ${TARGET} \
+                --wait
+
+          workingDir: ${PROJECT_SOURCE}
+    - id: test-image
+      exec:
+          component: runtime
+          commandLine: |
+              #!/bin/bash
+              set -ex
+
+              NAME=${NAME:-hello}
+              NAMESPACE=${NAMESPACE:-$(oc project -q)}
+              HW_TARGET=${HW_TARGET:-j784s4evm}
+              CLIENT_NAME=${CLIENT_NAME:-default}
+              EXPORTER_LABEL=${EXPORTER_LABEL:-"board=${HW_TARGET}"}
+              DISTRO=${DISTRO:-autosd}
+
+              echo "Looking for PVC for build ${NAME} in namespace ${NAMESPACE}"
+              AIB_PVC=$(oc -n ${NAMESPACE} get pvc -l automotive.sdv.cloud.redhat.com/imagebuild-name=${NAME} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+
+              if [ -z "$AIB_PVC" ]; then
+                  echo "Error: No PVC found for build ${NAME}. Please run 'build-image' first."
+                  exit 1
+              fi
+
+              echo "Found build PVC: $AIB_PVC"
+
+              # Apply Tekton resources with explicit namespace
+              oc -n ${NAMESPACE} apply -f .tekton/jumpstarter-pipeline.yaml
+              oc -n ${NAMESPACE} apply -f .tekton/tasks/get-lease.yaml
+              oc -n ${NAMESPACE} apply -f .tekton/tasks/release-lease.yaml
+              oc -n ${NAMESPACE} apply -f .tekton/tasks/provision-ti.yaml
+
+              cat <<EOF | oc -n ${NAMESPACE} create -f -
+              apiVersion: tekton.dev/v1
+              kind: PipelineRun
+              metadata:
+                generateName: jumpstarter-provision-${NAME}-
+                namespace: ${NAMESPACE}
+              spec:
+                pipelineRef:
+                  name: provision-pipeline
+                params:
+                  - name: hw-target
+                    value: ${HW_TARGET}
+                  - name: exporter-labels
+                    value:
+                    - ${EXPORTER_LABEL}
+                  - name: image
+                    value: /workspace/${DISTRO}-${HW_TARGET}.raw
+                  - name: client-name
+                    value: ${CLIENT_NAME}
+                workspaces:
+                  - name: jumpstarter-client-secret
+                    secret:
+                      secretName: jumpstarter-client
+                  - name: shared-workspace
+                    persistentVolumeClaim:
+                      claimName: ${AIB_PVC}
+              EOF
+
+              PIPELINE_NAME=$(oc -n ${NAMESPACE} get pipelinerun --sort-by=.metadata.creationTimestamp -o name | tail -1)
+              echo "PipelineRun ${PIPELINE_NAME} created successfully!"
+
+              echo "watching PipelineRun progress..."
+              oc -n ${NAMESPACE} wait --for=condition=Succeeded "${PIPELINE_NAME}" --timeout=600s || {
+                  echo "pipeline failed or timed out"
+                  oc -n ${NAMESPACE} describe "${PIPELINE_NAME}"
+                  exit 1
+              }
+
+          workingDir: ${PROJECT_SOURCE}
+    - id: provision-code
+      composite:
+          commands:
+              - build
+              - build-image-ti
+              - trigger-jumpstarter-pipeline
+          parallel: false
