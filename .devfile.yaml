@@ -93,7 +93,7 @@ commands:
               NAMESPACE=${NAMESPACE:-$(oc project -q)}
               HW_TARGET=${HW_TARGET:-j784s4evm}
               CLIENT_NAME=${CLIENT_NAME:-default}
-              EXPORTER_LABEL=${EXPORTER_LABEL:-"board=${HW_TARGET}"}
+              EXPORTER_LABEL=${EXPORTER_LABEL:-"board-type=${HW_TARGET}"}
               DISTRO=${DISTRO:-autosd}
 
               echo "Looking for PVC for build ${NAME} in namespace ${NAMESPACE}"
