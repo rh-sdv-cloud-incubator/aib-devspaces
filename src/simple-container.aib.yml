@@ -16,11 +16,12 @@ content:
       tag: latest
       name: localhost/radio
   add_files:
-    - path: /etc/containers/systemd/radio.container
-      source_path: ./files/radio.container
+    - path: /etc/systemd/system/radio.service
+      source_path: ./files/radio.service
   systemd:
     enabled_services:
       - routingmanagerd
+      - radio
 
 auth:
   # "password"
