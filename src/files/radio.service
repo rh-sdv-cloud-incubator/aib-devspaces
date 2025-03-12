@@ -1,0 +1,16 @@
+[Unit]
+Description=Demo radio service container
+Requires=routingmanagerd.socket
+
+[Service]
+Restart=on-failure
+ExecStart=/usr/bin/podman run \
+    --name systemd-radio \
+    -dit localhost/radio \
+ExecStop=/usr/bin/podman stop \
+    --ignore -t 2 \
+    systemd-radio
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
