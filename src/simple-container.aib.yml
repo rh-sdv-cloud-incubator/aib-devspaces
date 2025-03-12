@@ -1,0 +1,28 @@
+# Example installing and use a container as a service
+
+name: simple-container
+
+content:
+  # The container service depends on vsomeip3-routingmanager from this repo
+  repos:
+    - id: copr-sample-apps
+      baseurl: https://download.copr.fedorainfracloud.org/results/alexl/cs9-sample-images/centos-stream-9-$arch/
+  rpms:
+    - curl
+    - vsomeip3-routingmanager
+    - vi
+  container_images:
+    - source: quay.io/lrotenbe/sample-apps
+      tag: latest
+      name: localhost/radio
+  add_files:
+    - path: /etc/containers/systemd/radio.container
+      source_path: ./files/radio.container
+  systemd:
+    enabled_services:
+      - routingmanagerd
+
+auth:
+  # "password"
+  root_password: $6$xoLqEUz0cGGJRx01$H3H/bFm0myJPULNMtbSsOFd/2BnHqHkMD92Sfxd.EKM9hXTWSmELG8cf205l6dktomuTcgKGGtGDgtvHVXSWU.
+
