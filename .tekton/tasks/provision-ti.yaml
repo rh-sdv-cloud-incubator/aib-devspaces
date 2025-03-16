@@ -14,7 +14,7 @@ spec:
       type: string
   steps:
     - computeResources: {}
-      image: 'quay.io/bzlotnik/ti-driver:latest'
+      image: 'quay.io/jumpstarter-dev/jumpstarter:latest'
       name: provision
       script: |
         #!/usr/bin/env bash
@@ -26,11 +26,7 @@ spec:
 
         jmp client shell -n "$JMP_LEASE" $(params.client-name) << 'ENDCOMMANDS'
         set -e
-        j ti flash \
-          --kernel J784S4XEVM.flasher.img \
-          --dtb k3-j784s4-evm.dtb \
-          --os-image $(params.image)
-
+        j storage flash $(params.image)
         exit_code=$?
         echo "Exit code: $exit_code"
         exit $exit_code
