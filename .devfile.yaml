@@ -16,6 +16,9 @@ components:
           image: quay.io/bzlotnik/aib-base-dev:latest-arm64
           mountSources: true
           args: ["tail", "-f", "/dev/null"]
+          env:
+              - name: KUBEDOCK_ENABLED
+                value: "true"
 commands:
     - id: build
       exec:
