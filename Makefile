@@ -7,7 +7,7 @@ ORG = lrotenbe
 IMG = sample-apps
 TAG = latest
 
-all: $(BUILDDIR)/hello $(BUILDDIR)/radio publish-artifacts generate-manifest
+all: $(BUILDDIR)/hello $(BUILDDIR)/radio generate-manifest
 
 $(BUILDDIR)/hello: $(SRCDIR)/hello.c
 	mkdir -p $(BUILDDIR)
@@ -19,10 +19,6 @@ $(BUILDDIR)/radio:
 
 publish-conatiner:
 	podman push $(REGISTRY)/$(ORG)/$(IMG):$(TAG)
-
-publish-artifacts: $(BUILDDIR)/hello
-	mkdir -p $(ARTIFACTS_DIR)
-	cp $(BUILDDIR)/hello $(ARTIFACTS_DIR)/
 
 generate-manifest:
 	@chmod +x ./generate-manifest.sh
@@ -36,4 +32,4 @@ clean:
 clean-container:
 	podman image rm $(REGISTRY)/$(ORG)/$(IMG):$(TAG)
 
-.PHONY: all clean publish-artifacts generate-manifest publish-container clean-container
+.PHONY: all clean generate-manifest publish-container clean-container

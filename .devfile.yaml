@@ -16,28 +16,28 @@ components:
           image: quay.io/bzlotnik/aib-base-dev:latest-arm64
           mountSources: true
           args: ["tail", "-f", "/dev/null"]
-          volumeMounts:
-              - name: artifacts-volume
-                path: /workspace/artifacts
+          # volumeMounts:
+          #     - name: artifacts-volume
+          #       path: /workspace/artifacts
 
-    - name: artifact-server
-      container:
-          image: quay.io/nginx/nginx-unprivileged:alpine
-          mountSources: false
-          memoryLimit: 128Mi
-          cpuLimit: "0.5"
-          volumeMounts:
-              - name: artifacts-volume
-                path: /usr/share/nginx/html
-          endpoints:
-              - name: artifacts
-                targetPort: 8080
-                exposure: public
-                protocol: http
+    # - name: artifact-server
+    #   container:
+    #       image: quay.io/nginx/nginx-unprivileged:alpine
+    #       mountSources: false
+    #       memoryLimit: 128Mi
+    #       cpuLimit: "0.5"
+    #       volumeMounts:
+    #           - name: artifacts-volume
+    #             path: /usr/share/nginx/html
+    #       endpoints:
+    #           - name: artifacts
+    #             targetPort: 8080
+    #             exposure: public
+    #             protocol: http
 
-    - name: artifacts-volume
-      volume:
-          size: 1Gi
+    # - name: artifacts-volume
+    #   volume:
+    #       size: 1Gi
 
 commands:
     - id: build

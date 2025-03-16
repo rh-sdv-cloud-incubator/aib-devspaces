@@ -21,7 +21,7 @@ spec:
         set -ex
         set -o pipefail
 
-        jmp client use-config $(params.client-name)
+        jmp client config use $(params.client-name)
         export JMP_LEASE=$(params.jmp-lease-id)
 
         jmp client shell -n "$JMP_LEASE" $(params.client-name) << 'ENDCOMMANDS'
