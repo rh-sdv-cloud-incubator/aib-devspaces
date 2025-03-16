@@ -16,29 +16,6 @@ components:
           image: quay.io/bzlotnik/aib-base-dev:latest-arm64
           mountSources: true
           args: ["tail", "-f", "/dev/null"]
-          # volumeMounts:
-          #     - name: artifacts-volume
-          #       path: /workspace/artifacts
-
-    # - name: artifact-server
-    #   container:
-    #       image: quay.io/nginx/nginx-unprivileged:alpine
-    #       mountSources: false
-    #       memoryLimit: 128Mi
-    #       cpuLimit: "0.5"
-    #       volumeMounts:
-    #           - name: artifacts-volume
-    #             path: /usr/share/nginx/html
-    #       endpoints:
-    #           - name: artifacts
-    #             targetPort: 8080
-    #             exposure: public
-    #             protocol: http
-
-    # - name: artifacts-volume
-    #   volume:
-    #       size: 1Gi
-
 commands:
     - id: build
       exec:
@@ -141,7 +118,7 @@ commands:
               EOF
 
               PIPELINE_NAME=$(oc -n ${NAMESPACE} get pipelinerun --sort-by=.metadata.creationTimestamp -o name | tail -1)
-              echo "PipelineRun ${PIPELINE_NAME} created successfully!"
+              echo "PipelineRun ${PIPELINE_NAME} created successfully"
 
               echo "watching PipelineRun progress..."
               oc -n ${NAMESPACE} wait --for=condition=Succeeded "${PIPELINE_NAME}" --timeout=600s || {
