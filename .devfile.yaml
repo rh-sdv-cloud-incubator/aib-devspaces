@@ -19,11 +19,23 @@ components:
           env:
               - name: KUBEDOCK_ENABLED
                 value: "true"
+
+    - name: cpp-builder
+      container:
+          image: quay.io/centos/centos:stream9-development
+          mountSources: true
+          memoryLimit: 2Gi
+          args: ["tail", "-f", "/dev/null"]
+          env:
+              - name: VSOMEIP_CONFIGURATION
+                value: "/projects/aib-devspace/src/vsomeip-client.json"
+          command: ["/bin/bash", "-c", "dnf install -y 'dnf-command(config-manager)' && dnf install -y --nogpgcheck epel-release epel-next-release && dnf update -y && dnf install -y --nogpgcheck vsomeip3-devel boost-devel cmake gcc gcc-c++ && tail -f /dev/null"]
+
 commands:
     - id: build
       exec:
           component: runtime
-          commandLine: make all
+          commandLine: make build/hello
           workingDir: ${PROJECT_SOURCE}
 
     - id: clean
@@ -38,6 +50,26 @@ commands:
           commandLine: ./build/hello
           workingDir: ${PROJECT_SOURCE}
 
+    # New commands for building C++ components directly without podman
+    - id: build-cpp
+      exec:
+          component: cpp-builder
+          commandLine: cd src && cmake -B ../build && cmake --build ../build
+          workingDir: ${PROJECT_SOURCE}
+
+    - id: run-radio-service
+      exec:
+          component: cpp-builder
+          commandLine: ./build/radio-service
+          workingDir: ${PROJECT_SOURCE}
+
+    - id: run-radio-client
+      exec:
+          component: cpp-builder
+          commandLine: ./build/radio-client
+          workingDir: ${PROJECT_SOURCE}
+
+    # AIB and deployment commands
     - id: build-image-ti
       exec:
           component: runtime
@@ -60,8 +92,8 @@ commands:
                 --export-format ${FORMAT} \
                 --target ${TARGET} \
                 --wait
-
           workingDir: ${PROJECT_SOURCE}
+
     - id: test-image
       exec:
           component: runtime
@@ -129,12 +161,20 @@ commands:
                   oc -n ${NAMESPACE} describe "${PIPELINE_NAME}"
                   exit 1
               }
-
           workingDir: ${PROJECT_SOURCE}
-    - id: provision-code
+
+    # Full combined workflow
+    - id: build-all
       composite:
           commands:
               - build
+              - build-cpp
+          parallel: false
+
+    - id: provision-code
+      composite:
+          commands:
+              - build-all
               - build-image-ti
-              - trigger-jumpstarter-pipeline
+              - test-image
           parallel: false
