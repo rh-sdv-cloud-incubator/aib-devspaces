@@ -34,6 +34,43 @@ commands:
     #   apply:
     #     component: build-image
 
+    - id: setup-build
+      exec:
+          component: runtime
+          commandLine: |
+              oc apply -f - <<EOF
+              apiVersion: image.openshift.io/v1
+              kind: ImageStream
+              metadata:
+                name: auto-apps
+                namespace: $(oc project -q)
+              ---
+              apiVersion: build.openshift.io/v1
+              kind: BuildConfig
+              metadata:
+                name: auto-apps-build
+                namespace: $(oc project -q)
+              spec:
+                output:
+                  to:
+                    kind: ImageStreamTag
+                    name: "auto-apps:latest"
+                strategy:
+                  type: Docker
+                  dockerStrategy:
+                    dockerfilePath: Containerfile.auto-apps
+                source:
+                  type: Binary
+                triggers:
+                  - type: ConfigChange
+              EOF
+          workingDir: ${PROJECT_SOURCE}
+    - id: start-build
+      exec:
+        component: runtime
+        commandLine: |
+            oc start-build auto-apps-build --from-dir=. --follow
+        workingDir: ${PROJECT_SOURCE}
     - id: build
       exec:
           component: runtime
