@@ -13,7 +13,7 @@ projects:
 components:
     - name: runtime
       container:
-          image: quay.io/devfile/universal-developer-image
+          image: quay.io/bzlotnik/aib-base-dev:latest
           mountSources: true
           args: ["tail", "-f", "/dev/null"]
           env:
