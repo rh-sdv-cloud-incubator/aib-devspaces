@@ -19,6 +19,8 @@ components:
           env:
               - name: KUBEDOCK_ENABLED
                 value: "true"
+              - name: XDG_CONFIG_HOME
+                value: "/home/user/.config"
     # - name: build-image
     #   image:
     #       imageName: auto-apps:latest
