@@ -1,0 +1,17 @@
+PREFIX=registry.gitlab.com/centos/automotive/sample-images
+IMAGE=${PREFIX}/demo/auto-apps
+
+build:
+	podman build -f Containerfile.auto-apps -t ${IMAGE}:latest-$$(arch) .
+
+push:
+	podman push ${IMAGE}:latest-$$(arch)
+
+multiarch:
+	podman pull ${IMAGE}:latest-aarch64
+	podman pull ${IMAGE}:latest-x86_64
+	podman manifest rm ${IMAGE}:latest || true
+	podman manifest create ${IMAGE}:latest ${IMAGE}:latest-x86_64 ${IMAGE}:latest-aarch64
+
+push-multiarch:
+	podman manifest push --all --format v2s2 ${IMAGE}:latest docker://${IMAGE}:latest

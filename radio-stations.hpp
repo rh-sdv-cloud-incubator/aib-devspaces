@@ -16,4 +16,3 @@ struct radio_station_info_t {
 void radio_stations_init(void);
 uint32_t n_radio_stations(void);
 const radio_station_info_t *get_radio_stations(uint32_t id);
-

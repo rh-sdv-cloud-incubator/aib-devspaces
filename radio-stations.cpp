@@ -506,4 +506,3 @@ get_radio_stations(uint32_t id)
 {
   return &radio_stations[id];
 }
-

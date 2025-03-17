@@ -435,4 +435,3 @@ int main() {
     // Work around dlt-daemon timeout on exit
     _exit(0);
 }
-

@@ -26,8 +26,10 @@ target_link_libraries(radio-service  vsomeip3 ${Boost_LIBRARIES})
 add_executable(radio-client radio-client.cpp services.hpp)
 target_link_libraries(radio-client  vsomeip3 ${Boost_LIBRARIES})
 
+add_executable(engine-service engine-service.cpp services.hpp)
+target_link_libraries(engine-service  vsomeip3 ${Boost_LIBRARIES})
+
 install (
-    TARGETS radio-service radio-client
+    TARGETS radio-service radio-client engine-service
     RUNTIME DESTINATION "${INSTALL_BIN_DIR}" COMPONENT bin
 )
-

@@ -117,4 +117,3 @@ response (const std::shared_ptr<vsomeip::message> &_request,
 
     return its_response;
 }
-
