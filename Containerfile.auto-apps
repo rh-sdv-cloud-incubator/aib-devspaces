@@ -4,9 +4,9 @@ RUN dnf update -y
 
 # Enable copr
 RUN dnf install -y 'dnf-command(copr)'
-RUN dnf copr -y enable alexl/cs9-sample-images
+RUN dnf copr -y enable alexl/cs9-sample-images centos-stream-9-aarch64
 
-RUN dnf install --installroot /installroot  -y --nogpgcheck vsomeip3 bash \
+RUN dnf install --releasever 9 --installroot /installroot  -y --nogpgcheck vsomeip3 bash \
     boost-system boost-thread boost-log boost-chrono boost-date-time boost-atomic \
     boost-log boost-filesystem boost-regex auto-apps
 

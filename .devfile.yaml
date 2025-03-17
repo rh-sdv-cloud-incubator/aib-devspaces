@@ -94,7 +94,7 @@ commands:
       exec:
           component: runtime
           commandLine: |
-              NAME=${NAME:-hello}
+              NAME=${NAME:-simple}
               NAMESPACE=${NAMESPACE:-$(oc project -q)}
               ARCH=${ARCH:-arm64}
               FORMAT=${FORMAT:-image}
