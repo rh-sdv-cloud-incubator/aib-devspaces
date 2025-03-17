@@ -13,12 +13,14 @@ projects:
 components:
     - name: runtime
       container:
-          image: quay.io/bzlotnik/aib-base-dev:latest-arm64
+          image: quay.io/devfile/universal-developer-image
           mountSources: true
           args: ["tail", "-f", "/dev/null"]
           env:
               - name: KUBEDOCK_ENABLED
                 value: "true"
+              # - name: XDG_CONFIG_HOME
+              #   value: "/home/user/.config"
 commands:
     - id: build
       exec:
