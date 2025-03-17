@@ -19,15 +19,19 @@ components:
           env:
               - name: KUBEDOCK_ENABLED
                 value: "true"
-    - name: build
+    - name: build-image
       image:
           imageName: auto-apps:latest
-          autoBuild: true
+          autoBuild: false
           dockerfile:
               uri: Containerfile.auto-apps
               buildContext: .
               rootRequired: false
 commands:
+    - id: build-image
+      apply:
+        component: build-image
+
     - id: build
       exec:
           component: runtime
