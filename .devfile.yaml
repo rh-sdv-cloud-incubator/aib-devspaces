@@ -19,8 +19,6 @@ components:
           env:
               - name: KUBEDOCK_ENABLED
                 value: "true"
-              # - name: XDG_CONFIG_HOME
-              #   value: "/home/user/.config"
 commands:
     - id: build
       exec:
@@ -38,25 +36,6 @@ commands:
       exec:
           component: runtime
           commandLine: ./build/hello
-          workingDir: ${PROJECT_SOURCE}
-
-    # New commands for building C++ components directly without podman
-    - id: build-cpp
-      exec:
-          component: cpp-builder
-          commandLine: cd src && cmake -B ../build && cmake --build ../build
-          workingDir: ${PROJECT_SOURCE}
-
-    - id: run-radio-service
-      exec:
-          component: cpp-builder
-          commandLine: ./build/radio-service
-          workingDir: ${PROJECT_SOURCE}
-
-    - id: run-radio-client
-      exec:
-          component: cpp-builder
-          commandLine: ./build/radio-client
           workingDir: ${PROJECT_SOURCE}
 
     # AIB and deployment commands
