@@ -183,7 +183,6 @@ commands:
               }
           workingDir: ${PROJECT_SOURCE}
 
-    # Full combined workflow
     - id: build-all
       composite:
           commands:

@@ -17,7 +17,7 @@ content:
       name: localhost/radio
   add_files:
     - path: /etc/systemd/system/radio.service
-      source_path: ./files/radio.service
+      source_path: files/radio.service
   systemd:
     enabled_services:
       - routingmanagerd
