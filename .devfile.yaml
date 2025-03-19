@@ -58,19 +58,22 @@ commands:
                 strategy:
                   type: Docker
                   dockerStrategy:
-                    dockerfilePath: Containerfile.auto-apps
+                    dockerfilePath: Dockerfile
                 source:
-                  type: Binary
+                  type: Git
+                  git:
+                    uri: https://github.com/rh-sdv-cloud-incubator/aib-devspaces.git
+                    ref: main
                 triggers:
                   - type: ConfigChange
               EOF
           workingDir: ${PROJECT_SOURCE}
     - id: start-build
       exec:
-        component: runtime
-        commandLine: |
-            oc start-build auto-apps-build --from-dir=. --follow
-        workingDir: ${PROJECT_SOURCE}
+          component: runtime
+          commandLine: |
+              oc start-build auto-apps-build --from-dir=. --follow
+          workingDir: ${PROJECT_SOURCE}
 
     - id: clean
       exec:
