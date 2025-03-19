@@ -71,22 +71,11 @@ commands:
         commandLine: |
             oc start-build auto-apps-build --from-dir=. --follow
         workingDir: ${PROJECT_SOURCE}
-    - id: build
-      exec:
-          component: runtime
-          commandLine: make build/hello
-          workingDir: ${PROJECT_SOURCE}
 
     - id: clean
       exec:
           component: runtime
           commandLine: make clean
-          workingDir: ${PROJECT_SOURCE}
-
-    - id: run
-      exec:
-          component: runtime
-          commandLine: ./build/hello
           workingDir: ${PROJECT_SOURCE}
 
     # AIB and deployment commands
@@ -121,7 +110,7 @@ commands:
               #!/bin/bash
               set -ex
 
-              NAME=${NAME:-hello}
+              NAME=${NAME:-simple}
               NAMESPACE=${NAMESPACE:-$(oc project -q)}
               HW_TARGET=${HW_TARGET:-j784s4evm}
               CLIENT_NAME=${CLIENT_NAME:-default}
@@ -182,13 +171,6 @@ commands:
                   exit 1
               }
           workingDir: ${PROJECT_SOURCE}
-
-    - id: build-all
-      composite:
-          commands:
-              - build
-              - build-cpp
-          parallel: false
 
     - id: provision-code
       composite:
