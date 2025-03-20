@@ -175,6 +175,16 @@ commands:
               }
           workingDir: ${PROJECT_SOURCE}
 
+    - id: test-sample-apps
+      exec:
+          component: runtime
+          commandLine: |
+              CONFIG=${CONFIG:-default.yaml}
+              BOARD=${BOARD:-ti-06}
+
+              pytest --config=${CONFIG} --board=${BOARD}
+          workingDir: ${PROJECT_SOURCE}
+
     - id: provision-code
       composite:
           commands:
