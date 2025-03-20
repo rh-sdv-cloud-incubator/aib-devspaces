@@ -1,2 +1,3 @@
 build/
 hello.aib.yml
+test/__pycache__
