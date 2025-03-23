@@ -21,10 +21,10 @@ spec:
         set -ex
         set -o pipefail
 
-        jmp client config use $(params.client-name)
+        jmp config client use $(params.client-name)
         export JMP_LEASE=$(params.jmp-lease-id)
 
-        jmp shell --client $(params.client-name) --lease "$JMP_LEASE"  << 'ENDCOMMANDS'
+        jmp shell --client $(params.client-name) << 'ENDCOMMANDS'
         set -e
         j storage flash $(params.image)
         exit_code=$?
