@@ -24,7 +24,7 @@ spec:
         jmp client config use $(params.client-name)
         export JMP_LEASE=$(params.jmp-lease-id)
 
-        jmp client shell -n "$JMP_LEASE" $(params.client-name) << 'ENDCOMMANDS'
+        jmp shell --client $(params.client-name) --lease "$JMP_LEASE"  << 'ENDCOMMANDS'
         set -e
         j storage flash $(params.image)
         exit_code=$?
