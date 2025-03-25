@@ -8,8 +8,8 @@ auto-apps-$(VERSION).tar.gz:
 
 srpm: auto-apps-$(VERSION).tar.gz auto-apps.spec.in
 	sed s/@@VERSION@@/$(VERSION)/g auto-apps.spec.in > auto-apps.spec
-	rpmbuild -bs --define "_srcrpmdir $(TOPDIR)"  --define "_sourcedir $(TOPDIR)" auto-apps.spec
+	rpmbuild -bs --nodeps --define "_srcrpmdir $(TOPDIR)"  --define "_sourcedir $(TOPDIR)" auto-apps.spec
 
 rpm: auto-apps-$(VERSION).tar.gz auto-apps.spec.in
 	sed s/@@VERSION@@/$(VERSION)/g auto-apps.spec.in > auto-apps.spec
-	rpmbuild -ba --define "_srcrpmdir $(TOPDIR)"  --define "_sourcedir $(TOPDIR)" auto-apps.spec
+	rpmbuild -ba --nodeps --define "_srcrpmdir $(TOPDIR)"  --define "_sourcedir $(TOPDIR)" auto-apps.spec
