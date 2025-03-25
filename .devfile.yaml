@@ -81,12 +81,25 @@ commands:
           commandLine: make clean
           workingDir: ${PROJECT_SOURCE}
 
+    - id: set-app-image
+      exec:
+          component: runtime
+          commandLine: |
+              NAME=${NAME:-simple}
+              OUTPUT=${OUTPUT:-simple-gen}
+              NAMESPACE=${NAMESPACE:-$(oc project -q)}
+              APP_IMAGE=${APP_IMAGE:-$(oc get imagestreams -n ${NAMESPACE} -o jsonpath='{.items[0].status.dockerImageRepository}')}
+              MANIFEST_FILE="${NAME}.aib.yml"
+              OUTPUT_FILE="${OUTPUT}.aib.yml"
+              sed "s|__IMAGE__|$APP_IMAGE|g" "$MANIFEST_FILE" > "$OUTPUT_FILE"
+          workingDir: ${PROJECT_SOURCE}
+
     # AIB and deployment commands
     - id: build-image-ti
       exec:
           component: runtime
           commandLine: |
-              NAME=${NAME:-simple}
+              NAME=${NAME:-simple-gen}
               NAMESPACE=${NAMESPACE:-$(oc project -q)}
               ARCH=${ARCH:-arm64}
               FORMAT=${FORMAT:-image}
@@ -168,7 +181,7 @@ commands:
               echo "PipelineRun ${PIPELINE_NAME} created successfully"
 
               echo "watching PipelineRun progress..."
-              oc -n ${NAMESPACE} wait --for=condition=Succeeded "${PIPELINE_NAME}" --timeout=600s || {
+              oc -n ${NAMESPACE} wait --for=condition=Succeeded "${PIPELINE_NAME}" --timeout=1200s || {
                   echo "pipeline failed or timed out"
                   oc -n ${NAMESPACE} describe "${PIPELINE_NAME}"
                   exit 1
@@ -180,15 +193,27 @@ commands:
           component: runtime
           commandLine: |
               CONFIG=${CONFIG:-default.yaml}
-              BOARD=${BOARD:-ti-06}
+              NAMESPACE=${NAMESPACE:-$(oc project -q)}
+              LEASE_RELEASE_TASK=$(oc -n ${NAMESPACE} get taskrun --sort-by=.metadata.creationTimestamp -o name | tail -1)
+              LEASE_ID=$(oc -n ${NAMESPACE} get taskrun.tekton.dev/${LEASE_RELEASE_TASK} -o jsonpath='{.spec.params[0].value}')
+              EXPORTER=$(oc get leases.jumpstarter.dev -A | grep ${LEASE_ID} | awk '{print $5}')
+              #option 2: EXPORTER=$(oc get leases.jumpstarter.dev/${LEASE_ID} -n jumpstarter-lab -o jsonpath='{.status.exporterRef.name}')
 
-              pytest --config=${CONFIG} --board=${BOARD}
+              pytest --config=${CONFIG} --board=${EXPORTER}
           workingDir: ${PROJECT_SOURCE}
+
+    - id: build-code
+      composite:
+          commands:
+              - setup-build
+              - start-build
+          parallel: false
 
     - id: provision-code
       composite:
           commands:
-              - build-all
+              - build-code
+              - set-app-image
               - build-image-ti
               - test-image
           parallel: false

@@ -1,0 +1,99 @@
+---
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: liran
+  labels:
+    app.kubernetes.io/part-of: che.eclipse.org
+    app.kubernetes.io/component: workspaces-namespace
+  annotations:
+    che.eclipse.org/username: liranr23
+
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: liranr23-dev-role
+  namespace: liran
+rules:
+  - verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+    apiGroups:
+      - automotive.sdv.cloud.redhat.com
+    resources:
+      - automotivedevs
+      - imagebuilds
+  - verbs:
+      - create
+      - get
+      - list
+      - update
+      - watch
+    apiGroups:
+      - image.openshift.io
+    resources:
+      - imagestreams
+  - verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+    apiGroups:
+      - tekton.dev
+    resources:
+      - pipelineruns
+      - pipelines
+      - taskruns
+      - tasks
+  - verbs:
+      - create
+      - get
+      - list
+      - update
+      - watch
+    apiGroups:
+      - build.openshift.io
+    resources:
+      - buildconfigs
+      - buildconfigs/instantiatebinary
+      - builds/log
+
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: liranr23-dev
+  namespace: liran
+subjects:
+  - kind: User
+    apiGroup: rbac.authorization.k8s.io
+    name: liranr23
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: liranr23-dev-role
+
+---
+kind: Secret
+apiVersion: v1
+metadata:
+  name: jumpstarter-client
+  namespace: liran
+  labels:
+    controller.devfile.io/mount-to-devworkspace: 'true'
+    controller.devfile.io/watch-secret: 'true'
+  annotations:
+    controller.devfile.io/mount-path: /home/user/.config/jumpstarter/clients/
+data:
+  default.yaml: <secret>
+type: Opaque
+

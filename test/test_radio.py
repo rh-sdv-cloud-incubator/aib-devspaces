@@ -36,7 +36,7 @@ def setup_environment(client):
     serial = client.serial
     print("Restarting the board")
     gpio.cycle()
-    time.sleep(3)
+    time.sleep(6)
 
     with PexpectAdapter(client=serial) as console:
         console.logfile = sys.stdout.buffer
@@ -55,33 +55,36 @@ def test_radio(test_environment, request):
         helper = ConsoleHelper(console)
 
         try:
-            helper.send_command("podman run -it quay.io/lrotenbe/sample-apps:arm", timeout=180)
+            helper.send_command("podman exec -it systemd-radio /radio-client")
             logger.info("within the sample apps container")
-            helper.send_command("/radio-client")
-            assert helper.wait_for_pattern("Activate connection type"), "Activation of the radio client failed"
             logger.info("within the radio client")
-            assert helper.wait_for_pattern("50% volume") # starting point
-            time.sleep(5) # sleep because the serial console flakiness 
+            time.sleep(5) # sleep because the serial console flakiness
             helper.send_command("+")
             logger.info("vol up")
-            assert helper.wait_for_pattern("60% volume"), "Failed to increase the volume"
             helper.send_command("+")
             logger.info("vol up")
-            assert helper.wait_for_pattern("70% volume"), "Failed to increase the volume"
+            helper.send_command("-")
+            helper.send_command("-")
             helper.send_command("-")
             logger.info("vol down")
-            assert helper.wait_for_pattern("60% volume"), "Failed to decrease the volume"
             helper.send_command(b"\x1B") # escape
             logger.info("pause radio")
-            assert helper.wait_for_pattern("RADIO: Paused playing"), "Failed to pause the radio"
             helper.send_command(b"\x1B") # escape
             logger.info("continue radio")
-            assert helper.wait_for_pattern("RADIO: Started playing"), "Failed to resume the radio"
             helper.send_command("q")
             logger.info("exit client")
+            time.sleep(5) # sleep because the serial console flakiness
+
+            helper.send_command("podman logs systemd-radio") # service logs printed to stdout
+            
+            assert helper.wait_for_pattern("Activate connection type"), "Activation of the radio client failed"
+            assert helper.wait_for_pattern("50% volume"), "Failed to get initial volume"
+            assert helper.wait_for_pattern("60% volume"), "Failed to increase the volume"
+            assert helper.wait_for_pattern("70% volume"), "Failed to increase the volume"
+            assert helper.wait_for_pattern("40% volume"), "Failed to decrease the volume"
+            assert helper.wait_for_pattern("RADIO: Paused playing"), "Failed to pause the radio"
+            assert helper.wait_for_pattern("RADIO: Started playing"), "Failed to resume the radio"
             assert helper.wait_for_pattern("Deactivate connection type"), "Failed to exit the radio client"
-            helper.send_command(b"\x04")
-            logger.info("exit container")
 
         except Exception as e:
             print(f"Test failed: {e}")
