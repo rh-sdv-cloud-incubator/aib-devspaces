@@ -27,18 +27,21 @@ def test_environment(request):
 
     if not config_name:
         pytest.fail("Config name must be specified with --config")
-    if not board_name:
-        pytest.fail("Board name must be specified with --board")
 
     config_file = Path(os.environ['HOME']) / '.config/jumpstarter/clients' / config_name
     client_config = ClientConfigV1Alpha1.from_file(str(config_file))
     lease = None
     client = None
+    metadata_filter = None
+    if board_name:
+        metadata_filter = MetadataFilter(labels={"board": board_name})
+    else:
+        metadata_filter = MetadataFilter() # CI flow, we already own the lease
 
     with handle_interrupt():
         try:
             with client_config.lease(
-                metadata_filter=MetadataFilter(labels={"board": board_name}),
+                metadata_filter=metadata_filter,
                 lease_name=None,
             ) as lease:
                 with lease.connect() as client:
@@ -73,5 +76,5 @@ def pytest_addoption(parser):
         "--board",
         action="store",
         help="Board to use",
-        required=True
+        required=False
     )

@@ -12,7 +12,7 @@ content:
     - vsomeip3-routingmanager
     - vi
   container_images:
-    - source: quay.io/lrotenbe/sample-apps
+    - source: __IMAGE__
       tag: latest
       name: localhost/radio
   add_files:
