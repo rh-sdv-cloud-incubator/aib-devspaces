@@ -19,37 +19,21 @@ components:
           env:
               - name: KUBEDOCK_ENABLED
                 value: "true"
-              - name: XDG_CONFIG_HOME
-                value: "/home/user/.config"
-    # - name: build-image
-    #   image:
-    #       imageName: auto-apps:latest
-    #       autoBuild: false
-    #       dockerfile:
-    #           uri: Containerfile.auto-apps
-    #           buildContext: .
-    #           rootRequired: false
-commands:
-    # - id: build-image
-    #   apply:
-    #     component: build-image
+              - name: KUBECONFIG
+                value: "/home/user/.kube/config"
 
-    - id: setup-build
+commands:
+    - id: build-container
       exec:
           component: runtime
           commandLine: |
-              oc apply -f - <<EOF
-              apiVersion: image.openshift.io/v1
-              kind: ImageStream
-              metadata:
-                name: auto-apps
-                namespace: $(oc project -q)
-              ---
+              oc create imagestream auto-apps --dry-run=client -o yaml | oc apply -f -
+
+              cat <<EOF | oc apply -f -
               apiVersion: build.openshift.io/v1
               kind: BuildConfig
               metadata:
                 name: auto-apps-build
-                namespace: $(oc project -q)
               spec:
                 output:
                   to:
@@ -60,19 +44,21 @@ commands:
                   dockerStrategy:
                     dockerfilePath: Dockerfile
                 source:
-                  type: Git
-                  git:
-                    uri: https://github.com/rh-sdv-cloud-incubator/aib-devspaces.git
-                    ref: main
+                  type: Binary
                 triggers:
                   - type: ConfigChange
               EOF
+
+              cd ${PROJECT_SOURCE}
+              tar -cf - Dockerfile radio-client radio-service engine-service entrypoint.sh | oc start-build auto-apps-build --from-archive=- --follow
           workingDir: ${PROJECT_SOURCE}
-    - id: start-build
+
+    - id: build-app
       exec:
           component: runtime
           commandLine: |
-              oc start-build auto-apps-build --from-dir=. --follow
+              cmake .
+              make
           workingDir: ${PROJECT_SOURCE}
 
     - id: clean
@@ -94,12 +80,11 @@ commands:
               sed "s|__IMAGE__|$APP_IMAGE|g" "$MANIFEST_FILE" > "$OUTPUT_FILE"
           workingDir: ${PROJECT_SOURCE}
 
-    # AIB and deployment commands
     - id: build-image-ti
       exec:
           component: runtime
           commandLine: |
-              NAME=${NAME:-simple-gen}
+              NAME=${NAME:-simple}
               NAMESPACE=${NAMESPACE:-$(oc project -q)}
               ARCH=${ARCH:-arm64}
               FORMAT=${FORMAT:-image}
@@ -108,7 +93,8 @@ commands:
 
               MANIFEST_FILE="${NAME}.aib.yml"
 
-              caib --kubeconfig $KUBECONFIG build \
+              caib build \
+                --kubeconfig $KUBECONFIG \
                 -n ${NAMESPACE} \
                 --name ${NAME} \
                 --manifest ${MANIFEST_FILE} \
@@ -133,17 +119,13 @@ commands:
               EXPORTER_LABEL=${EXPORTER_LABEL:-"board-type=${HW_TARGET}"}
               DISTRO=${DISTRO:-autosd}
 
-              echo "Looking for PVC for build ${NAME} in namespace ${NAMESPACE}"
-              AIB_PVC=$(oc -n ${NAMESPACE} get pvc -l automotive.sdv.cloud.redhat.com/imagebuild-name=${NAME} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+              AIB_PVC=$(oc -n ${NAMESPACE} get pvc -l automotive.sdv.cloud.redhat.com/imagebuild-name=${NAME} | grep -v "Terminating" | grep "Bound" | awk '{print $1}' | head -1)
 
               if [ -z "$AIB_PVC" ]; then
-                  echo "Error: No PVC found for build ${NAME}. Please run 'build-image' first."
+                  echo "Error: No active PVC found for build ${NAME}."
                   exit 1
               fi
 
-              echo "Found build PVC: $AIB_PVC"
-
-              # Apply Tekton resources with explicit namespace
               oc -n ${NAMESPACE} apply -f .tekton/jumpstarter-pipeline.yaml
               oc -n ${NAMESPACE} apply -f .tekton/tasks/get-lease.yaml
               oc -n ${NAMESPACE} apply -f .tekton/tasks/release-lease.yaml
@@ -178,11 +160,8 @@ commands:
               EOF
 
               PIPELINE_NAME=$(oc -n ${NAMESPACE} get pipelinerun --sort-by=.metadata.creationTimestamp -o name | tail -1)
-              echo "PipelineRun ${PIPELINE_NAME} created successfully"
 
-              echo "watching PipelineRun progress..."
               oc -n ${NAMESPACE} wait --for=condition=Succeeded "${PIPELINE_NAME}" --timeout=1200s || {
-                  echo "pipeline failed or timed out"
                   oc -n ${NAMESPACE} describe "${PIPELINE_NAME}"
                   exit 1
               }
@@ -197,22 +176,14 @@ commands:
               LEASE_RELEASE_TASK=$(oc -n ${NAMESPACE} get taskrun --sort-by=.metadata.creationTimestamp -o name | tail -1)
               LEASE_ID=$(oc -n ${NAMESPACE} get taskrun.tekton.dev/${LEASE_RELEASE_TASK} -o jsonpath='{.spec.params[0].value}')
               EXPORTER=$(oc get leases.jumpstarter.dev -A | grep ${LEASE_ID} | awk '{print $5}')
-              #option 2: EXPORTER=$(oc get leases.jumpstarter.dev/${LEASE_ID} -n jumpstarter-lab -o jsonpath='{.status.exporterRef.name}')
 
               pytest --config=${CONFIG} --board=${EXPORTER}
           workingDir: ${PROJECT_SOURCE}
 
-    - id: build-code
-      composite:
-          commands:
-              - setup-build
-              - start-build
-          parallel: false
-
     - id: provision-code
       composite:
           commands:
-              - build-code
+              - build-container
               - set-app-image
               - build-image-ti
               - test-image
