@@ -23,8 +23,7 @@ content:
     - path: /etc/systemd/system/radio.service
       source_path: files/radio.service
     - path: /etc/ssh/sshd_config.d/01-permitroot.conf
-      content: |
-        PermitRootLogin yes
+      source_path: files/01-permitroot.conf
 
   systemd:
     enabled_services:
