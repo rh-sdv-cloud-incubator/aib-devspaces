@@ -1,3 +1,17 @@
+NAMESPACE ?= $(shell oc project -q)
+NAME ?= simple
+OUTPUT ?= simple-gen
+APP_IMAGE ?= $(shell oc get imagestreams -n $(NAMESPACE) -o jsonpath='{.items[0].status.dockerImageRepository}')
+ARCH ?= arm64
+FORMAT ?= image
+TARGET ?= j784s4evm
+DISTRO ?= autosd
+MANIFEST_FILE = $(NAME).aib.yml
+OUTPUT_FILE = $(OUTPUT).aib.yml
+CLIENT_NAME ?= default
+HW_TARGET ?= $(TARGET)
+EXPORTER_LABEL ?= board-type=$(TARGET)
+
 define BUILDCONFIG
 apiVersion: build.openshift.io/v1
 kind: BuildConfig
@@ -19,16 +33,34 @@ spec:
 endef
 export BUILDCONFIG
 
-NAMESPACE ?= $(shell oc project -q)
-NAME ?= simple
-OUTPUT ?= simple-gen
-APP_IMAGE ?= $(shell oc get imagestreams -n $(NAMESPACE) -o jsonpath='{.items[0].status.dockerImageRepository}')
-ARCH ?= arm64
-FORMAT ?= image
-TARGET ?= j784s4evm
-DISTRO ?= autosd
-MANIFEST_FILE = $(NAME).aib.yml
-OUTPUT_FILE = $(OUTPUT).aib.yml
+define PIPELINERUN
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: jumpstarter-provision-$(NAME)-
+  namespace: $(NAMESPACE)
+spec:
+  pipelineRef:
+    name: provision-pipeline
+  params:
+    - name: hw-target
+      value: $(HW_TARGET)
+    - name: exporter-labels
+      value:
+        - board-type=$(TARGET)
+    - name: image
+      value: /workspace/$(DISTRO)-$(TARGET).raw
+    - name: client-name
+      value: $(CLIENT_NAME)
+  workspaces:
+    - name: jumpstarter-client-secret
+      secret:
+        secretName: jumpstarter-client
+    - name: shared-workspace
+      persistentVolumeClaim:
+        claimName: __AIB_PVC__
+endef
+export PIPELINERUN
 
 create-build-config:
 	oc create imagestream auto-apps --dry-run=client -o yaml | oc apply -f -
@@ -54,10 +86,7 @@ build-image-ti:
 	  --wait
 
 test-image:
-	@HW_TARGET=$(TARGET) \
-	CLIENT_NAME=default \
-	EXPORTER_LABEL="board-type=$(TARGET)" \
-	bash -c ' \
+	@bash -c ' \
 	set -ex; \
 	AIB_PVC=$$(oc -n $(NAMESPACE) get pvc -l automotive.sdv.cloud.redhat.com/imagebuild-name=$(NAME) | grep -v "Terminating" | grep "Bound" | awk "{print \$$1}" | head -1); \
 	if [ -z "$$AIB_PVC" ]; then \
@@ -68,33 +97,7 @@ test-image:
 	oc -n $(NAMESPACE) apply -f .tekton/tasks/get-lease.yaml; \
 	oc -n $(NAMESPACE) apply -f .tekton/tasks/release-lease.yaml; \
 	oc -n $(NAMESPACE) apply -f .tekton/tasks/provision-ti.yaml; \
-	oc -n $(NAMESPACE) create -f - <<EOF \
-	apiVersion: tekton.dev/v1 \
-	kind: PipelineRun \
-	metadata: \
-	  generateName: jumpstarter-provision-$(NAME)- \
-	  namespace: $(NAMESPACE) \
-	spec: \
-	  pipelineRef: \
-	    name: provision-pipeline \
-	  params: \
-	    - name: hw-target \
-	      value: $(TARGET) \
-	    - name: exporter-labels \
-	      value: \
-	      - $(EXPORTER_LABEL) \
-	    - name: image \
-	      value: /workspace/$(DISTRO)-$(TARGET).raw \
-	    - name: client-name \
-	      value: $(CLIENT_NAME) \
-	  workspaces: \
-	    - name: jumpstarter-client-secret \
-	      secret: \
-	        secretName: jumpstarter-client \
-	    - name: shared-workspace \
-	      persistentVolumeClaim: \
-	        claimName: $$AIB_PVC \
-	EOF \
+	echo "$$PIPELINERUN" | sed "s/__AIB_PVC__/$$AIB_PVC/g" | oc -n $(NAMESPACE) create -f -; \
 	PIPELINE_NAME=$$(oc -n $(NAMESPACE) get pipelinerun --sort-by=.metadata.creationTimestamp -o name | tail -1); \
 	oc -n $(NAMESPACE) wait --for=condition=Succeeded "$$PIPELINE_NAME" --timeout=1200s || { \
 	    oc -n $(NAMESPACE) describe "$$PIPELINE_NAME"; \
@@ -108,11 +111,9 @@ test-sample-apps:
 	EXPORTER=$$(oc get leases.jumpstarter.dev -A | grep $$LEASE_ID | awk '{print $$5}') \
 	pytest --config=$(CONFIG) --board=$$EXPORTER
 
-# Build app
 build-app:
 	cmake .
 	make
 
-# Clean
 clean:
 	make clean
