@@ -26,158 +26,43 @@ commands:
     - id: build-container
       exec:
           component: runtime
-          commandLine: |
-              oc create imagestream auto-apps --dry-run=client -o yaml | oc apply -f -
-
-              cat <<EOF | oc apply -f -
-              apiVersion: build.openshift.io/v1
-              kind: BuildConfig
-              metadata:
-                name: auto-apps-build
-              spec:
-                output:
-                  to:
-                    kind: ImageStreamTag
-                    name: "auto-apps:latest"
-                strategy:
-                  type: Docker
-                  dockerStrategy:
-                    dockerfilePath: Dockerfile
-                source:
-                  type: Binary
-                triggers:
-                  - type: ConfigChange
-              EOF
-
-              cd ${PROJECT_SOURCE}
-              tar -cf - Dockerfile radio-client radio-service engine-service entrypoint.sh | oc start-build auto-apps-build --from-archive=- --follow
+          commandLine: make -f Makefile.dev build-container
           workingDir: ${PROJECT_SOURCE}
 
     - id: build-app
       exec:
           component: runtime
-          commandLine: |
-              cmake .
-              make
+          commandLine: make -f Makefile.dev build-app
           workingDir: ${PROJECT_SOURCE}
 
     - id: clean
       exec:
           component: runtime
-          commandLine: make clean
+          commandLine: make -f Makefile.dev clean
           workingDir: ${PROJECT_SOURCE}
 
     - id: set-app-image
       exec:
           component: runtime
-          commandLine: |
-              NAME=${NAME:-simple}
-              OUTPUT=${OUTPUT:-simple-gen}
-              NAMESPACE=${NAMESPACE:-$(oc project -q)}
-              APP_IMAGE=${APP_IMAGE:-$(oc get imagestreams -n ${NAMESPACE} -o jsonpath='{.items[0].status.dockerImageRepository}')}
-              MANIFEST_FILE="${NAME}.aib.yml"
-              OUTPUT_FILE="${OUTPUT}.aib.yml"
-              sed "s|__IMAGE__|$APP_IMAGE|g" "$MANIFEST_FILE" > "$OUTPUT_FILE"
+          commandLine: make -f Makefile.dev set-app-image
           workingDir: ${PROJECT_SOURCE}
 
     - id: build-image-ti
       exec:
           component: runtime
-          commandLine: |
-              NAME=${NAME:-simple}
-              NAMESPACE=${NAMESPACE:-$(oc project -q)}
-              ARCH=${ARCH:-arm64}
-              FORMAT=${FORMAT:-image}
-              TARGET=${TARGET:-j784s4evm}
-              DISTRO=${DISTRO:-autosd}
-
-              MANIFEST_FILE="${NAME}.aib.yml"
-
-              caib build \
-                --kubeconfig $KUBECONFIG \
-                -n ${NAMESPACE} \
-                --name ${NAME} \
-                --manifest ${MANIFEST_FILE} \
-                --arch ${ARCH} \
-                --distro ${DISTRO} \
-                --export-format ${FORMAT} \
-                --target ${TARGET} \
-                --wait
+          commandLine: make -f Makefile.dev build-image-ti
           workingDir: ${PROJECT_SOURCE}
 
     - id: test-image
       exec:
           component: runtime
-          commandLine: |
-              #!/bin/bash
-              set -ex
-
-              NAME=${NAME:-simple}
-              NAMESPACE=${NAMESPACE:-$(oc project -q)}
-              HW_TARGET=${HW_TARGET:-j784s4evm}
-              CLIENT_NAME=${CLIENT_NAME:-default}
-              EXPORTER_LABEL=${EXPORTER_LABEL:-"board-type=${HW_TARGET}"}
-              DISTRO=${DISTRO:-autosd}
-
-              AIB_PVC=$(oc -n ${NAMESPACE} get pvc -l automotive.sdv.cloud.redhat.com/imagebuild-name=${NAME} | grep -v "Terminating" | grep "Bound" | awk '{print $1}' | head -1)
-
-              if [ -z "$AIB_PVC" ]; then
-                  echo "Error: No active PVC found for build ${NAME}."
-                  exit 1
-              fi
-
-              oc -n ${NAMESPACE} apply -f .tekton/jumpstarter-pipeline.yaml
-              oc -n ${NAMESPACE} apply -f .tekton/tasks/get-lease.yaml
-              oc -n ${NAMESPACE} apply -f .tekton/tasks/release-lease.yaml
-              oc -n ${NAMESPACE} apply -f .tekton/tasks/provision-ti.yaml
-
-              cat <<EOF | oc -n ${NAMESPACE} create -f -
-              apiVersion: tekton.dev/v1
-              kind: PipelineRun
-              metadata:
-                generateName: jumpstarter-provision-${NAME}-
-                namespace: ${NAMESPACE}
-              spec:
-                pipelineRef:
-                  name: provision-pipeline
-                params:
-                  - name: hw-target
-                    value: ${HW_TARGET}
-                  - name: exporter-labels
-                    value:
-                    - ${EXPORTER_LABEL}
-                  - name: image
-                    value: /workspace/${DISTRO}-${HW_TARGET}.raw
-                  - name: client-name
-                    value: ${CLIENT_NAME}
-                workspaces:
-                  - name: jumpstarter-client-secret
-                    secret:
-                      secretName: jumpstarter-client
-                  - name: shared-workspace
-                    persistentVolumeClaim:
-                      claimName: ${AIB_PVC}
-              EOF
-
-              PIPELINE_NAME=$(oc -n ${NAMESPACE} get pipelinerun --sort-by=.metadata.creationTimestamp -o name | tail -1)
-
-              oc -n ${NAMESPACE} wait --for=condition=Succeeded "${PIPELINE_NAME}" --timeout=1200s || {
-                  oc -n ${NAMESPACE} describe "${PIPELINE_NAME}"
-                  exit 1
-              }
+          commandLine: make -f Makefile.dev test-image
           workingDir: ${PROJECT_SOURCE}
 
     - id: test-sample-apps
       exec:
           component: runtime
-          commandLine: |
-              CONFIG=${CONFIG:-default.yaml}
-              NAMESPACE=${NAMESPACE:-$(oc project -q)}
-              LEASE_RELEASE_TASK=$(oc -n ${NAMESPACE} get taskrun --sort-by=.metadata.creationTimestamp -o name | tail -1)
-              LEASE_ID=$(oc -n ${NAMESPACE} get taskrun.tekton.dev/${LEASE_RELEASE_TASK} -o jsonpath='{.spec.params[0].value}')
-              EXPORTER=$(oc get leases.jumpstarter.dev -A | grep ${LEASE_ID} | awk '{print $5}')
-
-              pytest --config=${CONFIG} --board=${EXPORTER}
+          commandLine: make -f Makefile.dev test-sample-apps
           workingDir: ${PROJECT_SOURCE}
 
     - id: provision-code

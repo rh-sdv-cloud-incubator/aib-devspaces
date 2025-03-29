@@ -14,6 +14,7 @@ content:
     - openssh-server
     - chrony
     - iproute2
+    - buildah
   container_images:
     - source: __IMAGE__
       tag: latest

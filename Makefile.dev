@@ -1,0 +1,118 @@
+define BUILDCONFIG
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: auto-apps-build
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: "auto-apps:latest"
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  source:
+    type: Binary
+  triggers:
+    - type: ConfigChange
+endef
+export BUILDCONFIG
+
+NAMESPACE ?= $(shell oc project -q)
+NAME ?= simple
+OUTPUT ?= simple-gen
+APP_IMAGE ?= $(shell oc get imagestreams -n $(NAMESPACE) -o jsonpath='{.items[0].status.dockerImageRepository}')
+ARCH ?= arm64
+FORMAT ?= image
+TARGET ?= j784s4evm
+DISTRO ?= autosd
+MANIFEST_FILE = $(NAME).aib.yml
+OUTPUT_FILE = $(OUTPUT).aib.yml
+
+create-build-config:
+	oc create imagestream auto-apps --dry-run=client -o yaml | oc apply -f -
+	echo "$$BUILDCONFIG" | oc apply -f -
+
+build-container: create-build-config
+	cd ${PWD} && tar -cf - Dockerfile radio-client radio-service engine-service entrypoint.sh | \
+	oc start-build auto-apps-build --from-archive=- --follow
+
+set-app-image:
+	sed "s|__IMAGE__|$(APP_IMAGE)|g" "$(MANIFEST_FILE)" > "$(OUTPUT_FILE)"
+
+build-image-ti:
+	caib build \
+	  --kubeconfig $(KUBECONFIG) \
+	  -n $(NAMESPACE) \
+	  --name $(NAME) \
+	  --manifest $(MANIFEST_FILE) \
+	  --arch $(ARCH) \
+	  --distro $(DISTRO) \
+	  --export-format $(FORMAT) \
+	  --target $(TARGET) \
+	  --wait
+
+test-image:
+	@HW_TARGET=$(TARGET) \
+	CLIENT_NAME=default \
+	EXPORTER_LABEL="board-type=$(TARGET)" \
+	bash -c ' \
+	set -ex; \
+	AIB_PVC=$$(oc -n $(NAMESPACE) get pvc -l automotive.sdv.cloud.redhat.com/imagebuild-name=$(NAME) | grep -v "Terminating" | grep "Bound" | awk "{print \$$1}" | head -1); \
+	if [ -z "$$AIB_PVC" ]; then \
+	    echo "Error: No active PVC found for build $(NAME)."; \
+	    exit 1; \
+	fi; \
+	oc -n $(NAMESPACE) apply -f .tekton/jumpstarter-pipeline.yaml; \
+	oc -n $(NAMESPACE) apply -f .tekton/tasks/get-lease.yaml; \
+	oc -n $(NAMESPACE) apply -f .tekton/tasks/release-lease.yaml; \
+	oc -n $(NAMESPACE) apply -f .tekton/tasks/provision-ti.yaml; \
+	oc -n $(NAMESPACE) create -f - <<EOF \
+	apiVersion: tekton.dev/v1 \
+	kind: PipelineRun \
+	metadata: \
+	  generateName: jumpstarter-provision-$(NAME)- \
+	  namespace: $(NAMESPACE) \
+	spec: \
+	  pipelineRef: \
+	    name: provision-pipeline \
+	  params: \
+	    - name: hw-target \
+	      value: $(TARGET) \
+	    - name: exporter-labels \
+	      value: \
+	      - $(EXPORTER_LABEL) \
+	    - name: image \
+	      value: /workspace/$(DISTRO)-$(TARGET).raw \
+	    - name: client-name \
+	      value: $(CLIENT_NAME) \
+	  workspaces: \
+	    - name: jumpstarter-client-secret \
+	      secret: \
+	        secretName: jumpstarter-client \
+	    - name: shared-workspace \
+	      persistentVolumeClaim: \
+	        claimName: $$AIB_PVC \
+	EOF \
+	PIPELINE_NAME=$$(oc -n $(NAMESPACE) get pipelinerun --sort-by=.metadata.creationTimestamp -o name | tail -1); \
+	oc -n $(NAMESPACE) wait --for=condition=Succeeded "$$PIPELINE_NAME" --timeout=1200s || { \
+	    oc -n $(NAMESPACE) describe "$$PIPELINE_NAME"; \
+	    exit 1; \
+	}'
+
+test-sample-apps:
+	CONFIG=${CONFIG:-default.yaml} \
+	LEASE_RELEASE_TASK=$$(oc -n $(NAMESPACE) get taskrun --sort-by=.metadata.creationTimestamp -o name | tail -1) \
+	LEASE_ID=$$(oc -n $(NAMESPACE) get taskrun.tekton.dev/$$LEASE_RELEASE_TASK -o jsonpath='{.spec.params[0].value}') \
+	EXPORTER=$$(oc get leases.jumpstarter.dev -A | grep $$LEASE_ID | awk '{print $$5}') \
+	pytest --config=$(CONFIG) --board=$$EXPORTER
+
+# Build app
+build-app:
+	cmake .
+	make
+
+# Clean
+clean:
+	make clean
