@@ -2,7 +2,6 @@ import pytest
 import os
 from pathlib import Path
 from jumpstarter.config import ClientConfigV1Alpha1
-from jumpstarter.common import MetadataFilter
 from test_radio import setup_environment
 import logging
 import signal
@@ -32,16 +31,14 @@ def test_environment(request):
     client_config = ClientConfigV1Alpha1.from_file(str(config_file))
     lease = None
     client = None
-    metadata_filter = None
+    selector = None
     if board_name:
-        metadata_filter = MetadataFilter(labels={"board": board_name})
-    else:
-        metadata_filter = MetadataFilter() # CI flow, we already own the lease
+        selector = f"board={board_name}"
 
     with handle_interrupt():
         try:
             with client_config.lease(
-                metadata_filter=metadata_filter,
+                selector=selector,
                 lease_name=None,
             ) as lease:
                 with lease.connect() as client:
