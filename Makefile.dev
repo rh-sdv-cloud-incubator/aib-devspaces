@@ -83,7 +83,9 @@ build-image-ti:
 	  --distro $(DISTRO) \
 	  --export-format $(FORMAT) \
 	  --target $(TARGET) \
-	  --wait
+	  --mode package \
+	  --wait \
+	  --define use_debug=true
 
 test-image:
 	@bash -c ' \
