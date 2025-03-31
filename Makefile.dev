@@ -11,6 +11,8 @@ OUTPUT_FILE = $(OUTPUT).aib.yml
 CLIENT_NAME ?= default
 HW_TARGET ?= $(TARGET)
 EXPORTER_LABEL ?= board-type=$(TARGET)
+REGISTRY ?= quay.io/lrotenbe/autosd:latest
+REGISTRY_SECRET ?= quay-auth
 
 define BUILDCONFIG
 apiVersion: build.openshift.io/v1
@@ -62,6 +64,39 @@ spec:
 endef
 export PIPELINERUN
 
+define PUBLISHTASKRUN
+apiVersion: tekton.dev/v1
+kind: TaskRun
+metadata:
+  generateName: publish-reg-$(NAME)-
+  namespace: $(NAMESPACE)
+spec:
+  params:
+    - name: build-pvc-name
+      value: __AIB_PVC__
+    - name: distro
+      value: $(DISTRO)
+    - name: target
+      value: $(TARGET)
+    - name: export-format
+      value: $(FORMAT)
+    - name: repository-url
+      value: $(REGISTRY)
+    - name: secret-ref
+      value: $(REGISTRY_SECRET)
+  taskRef:
+    resolver: cluster
+	params:
+	  - name: kind
+		value: task
+	  - name: name
+		value: push-artifact-registry
+	  - name: namespace
+		value: automotive-dev-operator-system
+  timeout: 1h0m0s
+endef
+export PUBLISHTASKRUN
+
 create-build-config:
 	oc create imagestream auto-apps --dry-run=client -o yaml | oc apply -f -
 	echo "$$BUILDCONFIG" | oc apply -f -
@@ -78,7 +113,7 @@ build-image-ti:
 	  --kubeconfig $(KUBECONFIG) \
 	  -n $(NAMESPACE) \
 	  --name $(NAME) \
-	  --manifest $(MANIFEST_FILE) \
+	  --manifest $(OUTPUT_FILE) \
 	  --arch $(ARCH) \
 	  --distro $(DISTRO) \
 	  --export-format $(FORMAT) \
@@ -110,6 +145,21 @@ test-sample-apps:
 	EXPORTER=$$(oc get leases.jumpstarter.dev -A | grep $$LEASE_ID | awk '{print $$5}'); \
 	echo "Board to test: $$EXPORTER"; \
 	pytest --config=$(CLIENT_NAME).yaml --board=$$EXPORTER
+
+publish-image-reg:
+	@bash -c ' \
+	set -ex; \
+	AIB_PVC=$$(oc -n $(NAMESPACE) get pvc -l automotive.sdv.cloud.redhat.com/imagebuild-name=$(NAME) | grep -v "Terminating" | grep "Bound" | awk "{print \$$1}" | head -1); \
+	if [ -z "$$AIB_PVC" ]; then \
+	    echo "Error: No active PVC found for build $(NAME)."; \
+	    exit 1; \
+	fi; \
+	echo "$$PUBLISHTASKRUN" | sed "s/__AIB_PVC__/$$AIB_PVC/g" | oc -n $(NAMESPACE) create -f -; \
+	TASK_NAME=$$(oc -n $(NAMESPACE) get taskrun --sort-by=.metadata.creationTimestamp -o name | tail -1); \
+	oc -n $(NAMESPACE) wait --for=condition=Succeeded "$$TASK_NAME" --timeout=600s || { \
+	    oc -n $(NAMESPACE) describe "$$TASK_NAME"; \
+	    exit 1; \
+	}'
 
 build-app:
 	cmake .

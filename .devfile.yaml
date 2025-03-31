@@ -65,6 +65,12 @@ commands:
           commandLine: make -f Makefile.dev test-sample-apps
           workingDir: ${PROJECT_SOURCE}
 
+    - id: publish-image-reg
+      exec:
+          component: runtime
+          commandLine: make -f Makefile.dev publish-image-reg
+          workingDir: ${PROJECT_SOURCE}
+
     - id: provision-code
       composite:
           commands:
