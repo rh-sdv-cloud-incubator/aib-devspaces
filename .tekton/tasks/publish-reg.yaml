@@ -1,0 +1,60 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: push-artifact-registry
+spec:
+  params:
+    - name: build-pvc-name
+      type: string
+    - name: distro
+      type: string
+    - name: target
+      type: string
+    - name: export-format
+      type: string
+    - name: repository-url
+      type: string
+    - name: secret-ref
+      type: string
+  steps:
+    - name: push-artifact
+      image: ghcr.io/oras-project/oras:v1.2.0
+      env:
+        - name: DOCKER_CONFIG
+          value: /tekton/home/.docker
+      script: |
+        #!/bin/sh
+        set -ex
+
+        # Determine file extension based on export format
+        if [ "$(params.export-format)" = "image" ]; then
+          file_extension=".raw"
+        elif [ "$(params.export-format)" = "qcow2" ]; then
+          file_extension=".qcow2"
+        else
+          file_extension="$(params.export-format)"
+        fi
+
+        # Create the export file name with the correct extension
+        exportFile=$(params.distro)-$(params.target)${file_extension}
+
+        echo "Pushing image to $(params.repository-url)"
+        oras push --disable-path-validation \
+          $(params.repository-url) \
+          $exportFile:application/vnd.oci.image.layer.v1.tar
+
+        echo "Image pushed successfully to registry"
+      volumeMounts:
+        - name: task-pvc
+          mountPath: /output
+        - name: docker-config
+          mountPath: /tekton/home/.docker/config.json
+          subPath: .dockerconfigjson
+      workingDir: /output
+  volumes:
+    - name: task-pvc
+      persistentVolumeClaim:
+        claimName: $(params.build-pvc-name)
+    - name: docker-config
+      secret:
+        secretName: $(params.secret-ref)
