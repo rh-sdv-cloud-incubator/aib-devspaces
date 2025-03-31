@@ -105,11 +105,11 @@ test-image:
 	}'
 
 test-sample-apps:
-	CONFIG=${CONFIG:-default.yaml} \
 	LEASE_RELEASE_TASK=$$(oc -n $(NAMESPACE) get taskrun --sort-by=.metadata.creationTimestamp -o name | tail -1) \
-	LEASE_ID=$$(oc -n $(NAMESPACE) get taskrun.tekton.dev/$$LEASE_RELEASE_TASK -o jsonpath='{.spec.params[0].value}') \
-	EXPORTER=$$(oc get leases.jumpstarter.dev -A | grep $$LEASE_ID | awk '{print $$5}') \
-	pytest --config=$(CONFIG) --board=$$EXPORTER
+	LEASE_ID=$$(oc -n $(NAMESPACE) get $$LEASE_RELEASE_TASK -o jsonpath='{.spec.params[0].value}') \
+	EXPORTER=$$(oc get leases.jumpstarter.dev -A | grep $$LEASE_ID | awk '{print $$5}'); \
+	echo "Board to test: $$EXPORTER"; \
+	pytest --config=$(CLIENT_NAME).yaml --board=$$EXPORTER
 
 build-app:
 	cmake .

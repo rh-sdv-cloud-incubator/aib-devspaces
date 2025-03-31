@@ -10,6 +10,35 @@ metadata:
     che.eclipse.org/username: liranr23
 
 ---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: liran23-dev-clusterrole
+rules:
+  - verbs:
+      - get
+      - watch
+      - list
+    apiGroups:
+      - jumpstarter.dev
+    resources:
+      - leases
+
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: liranr23-dev-cluster
+subjects:
+  - kind: User
+    apiGroup: rbac.authorization.k8s.io
+    name: liranr23
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: liran23-dev-clusterrole
+
+---
 kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
