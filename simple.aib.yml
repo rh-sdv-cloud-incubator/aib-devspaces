@@ -1,7 +1,29 @@
-# Example installing and use a container as a service
-
 name: simple-container
-
+qm:
+  content:
+    repos:
+    - id: copr-sample-apps
+      baseurl: https://download.copr.fedorainfracloud.org/results/alexl/cs9-sample-images/centos-stream-9-$arch/
+    rpms:
+        - vsomeip3-routingmanager
+        - buildah
+        - vim
+        - curl
+        - rsync
+        - openssh-clients
+    systemd:
+      enabled_services:
+        - routingmanagerd
+        - radio
+    container_images:
+        - source: image-registry.openshift-image-registry.svc:5000/benny/auto-apps
+          tag: latest
+          name: localhost/radio
+    add_files:
+       - path: /etc/systemd/system/radio.service
+         source_path: files/radio.service
+       - path: /etc/ssh/sshd_config.d/01-permitroot.conf
+         source_path: files/01-permitroot.conf
 content:
   # The container service depends on vsomeip3-routingmanager from this repo
   repos:
@@ -11,12 +33,14 @@ content:
     - curl
     - vsomeip3-routingmanager
     - vim
+    - rsync
     - openssh-server
     - chrony
-    - iproute2
+    - iproute
     - buildah
+    - dnf
   container_images:
-    - source: __IMAGE__
+    - source: image-registry.openshift-image-registry.svc:5000/benny/auto-apps
       tag: latest
       name: localhost/radio
   add_files:
@@ -24,7 +48,6 @@ content:
       source_path: files/radio.service
     - path: /etc/ssh/sshd_config.d/01-permitroot.conf
       source_path: files/01-permitroot.conf
-
   systemd:
     enabled_services:
       - routingmanagerd
@@ -35,3 +58,6 @@ content:
 auth:
   # "password"
   root_password: $6$xoLqEUz0cGGJRx01$H3H/bFm0myJPULNMtbSsOFd/2BnHqHkMD92Sfxd.EKM9hXTWSmELG8cf205l6dktomuTcgKGGtGDgtvHVXSWU.
+  sshd_config:
+      PasswordAuthentication: true
+      PermitRootLogin: yes
