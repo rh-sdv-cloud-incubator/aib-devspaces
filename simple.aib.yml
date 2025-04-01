@@ -6,24 +6,24 @@ qm:
       baseurl: https://download.copr.fedorainfracloud.org/results/alexl/cs9-sample-images/centos-stream-9-$arch/
     rpms:
         - vsomeip3-routingmanager
-        - dnf
-        - iproute
         - buildah
         - vim
         - curl
         - rsync
+        - openssh-clients
     systemd:
       enabled_services:
         - routingmanagerd
         - radio
     container_images:
-        - source: __IMAGE__
+        - source: image-registry.openshift-image-registry.svc:5000/benny/auto-apps
           tag: latest
           name: localhost/radio
     add_files:
        - path: /etc/systemd/system/radio.service
          source_path: files/radio.service
-
+       - path: /etc/ssh/sshd_config.d/01-permitroot.conf
+         source_path: files/01-permitroot.conf
 content:
   # The container service depends on vsomeip3-routingmanager from this repo
   repos:
@@ -33,12 +33,14 @@ content:
     - curl
     - vsomeip3-routingmanager
     - vim
+    - rsync
     - openssh-server
     - chrony
     - iproute
     - buildah
+    - dnf
   container_images:
-    - source: __IMAGE__
+    - source: image-registry.openshift-image-registry.svc:5000/benny/auto-apps
       tag: latest
       name: localhost/radio
   add_files:
@@ -46,7 +48,6 @@ content:
       source_path: files/radio.service
     - path: /etc/ssh/sshd_config.d/01-permitroot.conf
       source_path: files/01-permitroot.conf
-
   systemd:
     enabled_services:
       - routingmanagerd
