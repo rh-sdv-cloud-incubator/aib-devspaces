@@ -16,7 +16,7 @@ qm:
         - routingmanagerd
         - radio
     container_images:
-        - source: image-registry.openshift-image-registry.svc:5000/benny/auto-apps
+        - source: __IMAGE__
           tag: latest
           name: localhost/radio
     add_files:
@@ -40,7 +40,7 @@ content:
     - buildah
     - dnf
   container_images:
-    - source: image-registry.openshift-image-registry.svc:5000/benny/auto-apps
+    - source: __IMAGE__
       tag: latest
       name: localhost/radio
   add_files:
