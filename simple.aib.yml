@@ -2,33 +2,51 @@ name: simple-container
 qm:
   content:
     repos:
-    - id: copr-sample-apps
-      baseurl: https://download.copr.fedorainfracloud.org/results/alexl/cs9-sample-images/centos-stream-9-$arch/
+      - id: copr-sample-apps
+        baseurl: >-
+          https://download.copr.fedorainfracloud.org/results/alexl/cs9-sample-images/centos-stream-9-$arch/
     rpms:
-        - vsomeip3-routingmanager
-        - buildah
-        - vim
-        - curl
-        - rsync
-        - openssh-clients
+      - vsomeip3-routingmanager
+      - buildah
+      - vim
+      - curl
+      - rsync
+      - openssh-clients
     systemd:
       enabled_services:
         - routingmanagerd
         - radio
     container_images:
-        - source: __IMAGE__
-          tag: latest
-          name: localhost/radio
+      - source: __IMAGE__
+        tag: latest
+        name: localhost/radio
     add_files:
-       - path: /etc/systemd/system/radio.service
-         source_path: files/radio.service
-       - path: /etc/ssh/sshd_config.d/01-permitroot.conf
-         source_path: files/01-permitroot.conf
+      - path: /etc/systemd/system/radio.service
+        text: |
+          [Unit]
+          Description=Demo radio service container
+          Requires=routingmanagerd.socket
+
+          [Service]
+          Restart=on-failure
+          ExecStart=/usr/bin/podman run \
+              --name systemd-radio \
+              -dit localhost/radio \
+          ExecStop=/usr/bin/podman stop \
+              --ignore -t 2 \
+              systemd-radio
+          RemainAfterExit=yes
+
+          [Install]
+          WantedBy=multi-user.target
+      - path: /etc/ssh/sshd_config.d/01-permitroot.conf
+        text: |
+          PermitRootLogin yes
 content:
-  # The container service depends on vsomeip3-routingmanager from this repo
   repos:
     - id: copr-sample-apps
-      baseurl: https://download.copr.fedorainfracloud.org/results/alexl/cs9-sample-images/centos-stream-9-$arch/
+      baseurl: >-
+        https://download.copr.fedorainfracloud.org/results/alexl/cs9-sample-images/centos-stream-9-$arch/
   rpms:
     - curl
     - vsomeip3-routingmanager
@@ -45,19 +63,35 @@ content:
       name: localhost/radio
   add_files:
     - path: /etc/systemd/system/radio.service
-      source_path: files/radio.service
+      text: |
+        [Unit]
+        Description=Demo radio service container
+        Requires=routingmanagerd.socket
+
+        [Service]
+        Restart=on-failure
+        ExecStart=/usr/bin/podman run \
+            --name systemd-radio \
+            -dit localhost/radio \
+        ExecStop=/usr/bin/podman stop \
+            --ignore -t 2 \
+            systemd-radio
+        RemainAfterExit=yes
+
+        [Install]
+        WantedBy=multi-user.target
     - path: /etc/ssh/sshd_config.d/01-permitroot.conf
-      source_path: files/01-permitroot.conf
+      text: |
+        PermitRootLogin yes
   systemd:
     enabled_services:
       - routingmanagerd
       - radio
       - sshd
       - chronyd
-
 auth:
-  # "password"
-  root_password: $6$xoLqEUz0cGGJRx01$H3H/bFm0myJPULNMtbSsOFd/2BnHqHkMD92Sfxd.EKM9hXTWSmELG8cf205l6dktomuTcgKGGtGDgtvHVXSWU.
+  root_password: >-
+    $6$xoLqEUz0cGGJRx01$H3H/bFm0myJPULNMtbSsOFd/2BnHqHkMD92Sfxd.EKM9hXTWSmELG8cf205l6dktomuTcgKGGtGDgtvHVXSWU.
   sshd_config:
-      PasswordAuthentication: true
-      PermitRootLogin: yes
+    PasswordAuthentication: true
+    PermitRootLogin: 'yes'
