@@ -55,10 +55,10 @@ commands:
           commandLine: make -f Makefile.dev build-image-ti
           workingDir: ${PROJECT_SOURCE}
 
-    - id: test-image
+    - id: flash-image
       exec:
           component: runtime
-          commandLine: make -f Makefile.dev test-image
+          commandLine: make -f Makefile.dev flash-image
           workingDir: ${PROJECT_SOURCE}
 
     - id: test-sample-apps
@@ -90,12 +90,3 @@ commands:
           group:
               kind: build
               isDefault: true
-
-    - id: provision-code
-      composite:
-          commands:
-              - build-container
-              - set-app-image
-              - build-image-ti
-              - test-image
-          parallel: false

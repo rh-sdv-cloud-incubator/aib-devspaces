@@ -131,7 +131,7 @@ build-image-ti:
 	  --wait \
 	  --define use_debug=true
 
-test-image:
+flash-image:
 	@bash -c ' \
 	set -ex; \
 	AIB_PVC=$$(oc -n $(NAMESPACE) get pvc -l automotive.sdv.cloud.redhat.com/imagebuild-name=$(NAME) | grep -v "Terminating" | grep "Bound" | awk "{print \$$1}" | head -1); \
@@ -142,10 +142,21 @@ test-image:
 	echo "$$PIPELINERUN" | sed "s/__AIB_PVC__/$$AIB_PVC/g" | oc -n $(NAMESPACE) create -f -; \
 	PIPELINE_NAME=$$(oc -n $(NAMESPACE) get pipelinerun --sort-by=.metadata.creationTimestamp -o name | tail -1 | cut -d "/" -f 2); \
 	echo "Following logs for $$PIPELINE_NAME"; \
-	tkn pipelinerun logs $$PIPELINE_NAME -f -n $(NAMESPACE) || { \
-	    oc -n $(NAMESPACE) describe "pipelinerun/$$PIPELINE_NAME"; \
-	    exit 1; \
-	}'
+	tkn pipelinerun logs $$PIPELINE_NAME -f -n $(NAMESPACE); \
+	\
+	# Extract the lease ID directly from the get-lease task \
+	GET_LEASE_TASK=$$(oc -n $(NAMESPACE) get taskrun --selector=tekton.dev/pipelineRun=$$PIPELINE_NAME,tekton.dev/pipelineTask=get-lease -o name | cut -d "/" -f 2); \
+	JMP_LEASE_ID=$$(oc -n $(NAMESPACE) get taskrun $$GET_LEASE_TASK -o jsonpath="{.status.taskResults[?(@.name=='"'"'jmp-lease-id'"'"')].value}"); \
+	\
+	echo "\\n\\n================================================================="; \
+	echo "🎉 Provisioning complete! Your board is ready."; \
+	echo "================================================================="; \
+	echo "Lease ID: $$JMP_LEASE_ID"; \
+	echo "\\nTo connect to this board directly, run:"; \
+	echo "export JMP_LEASE=$$JMP_LEASE_ID"; \
+	echo "jmp shell --client default"; \
+	echo "=================================================================\\n"; \
+	'
 
 test-sample-apps:
 	LEASE_RELEASE_TASK=$$(oc -n $(NAMESPACE) get taskrun --sort-by=.metadata.creationTimestamp -o name | tail -1) \
