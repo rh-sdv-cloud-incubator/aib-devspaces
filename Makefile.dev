@@ -63,6 +63,8 @@ spec:
       value: $(CLIENT_NAME)
     - name: debug-mode
       value: "true"
+    - name: skip-provision
+      value: "$(SKIP_PROVISION)"
   workspaces:
     - name: jumpstarter-client-secret
       secret:
@@ -133,7 +135,7 @@ build-image-ti:
 
 flash-image:
 	@bash -c ' \
-	set -ex; \
+	set -e; \
 	AIB_PVC=$$(oc -n $(NAMESPACE) get pvc -l automotive.sdv.cloud.redhat.com/imagebuild-name=$(NAME) | grep -v "Terminating" | grep "Bound" | awk "{print \$$1}" | head -1); \
 	if [ -z "$$AIB_PVC" ]; then \
 	    echo "Error: No active PVC found for build $(NAME)."; \
@@ -144,18 +146,40 @@ flash-image:
 	echo "Following logs for $$PIPELINE_NAME"; \
 	tkn pipelinerun logs $$PIPELINE_NAME -f -n $(NAMESPACE); \
 	\
-	# Extract the lease ID directly from the get-lease task \
-	GET_LEASE_TASK=$$(oc -n $(NAMESPACE) get taskrun --selector=tekton.dev/pipelineRun=$$PIPELINE_NAME,tekton.dev/pipelineTask=get-lease -o name | cut -d "/" -f 2); \
-	JMP_LEASE_ID=$$(oc -n $(NAMESPACE) get taskrun $$GET_LEASE_TASK -o jsonpath="{.status.taskResults[?(@.name=='"'"'jmp-lease-id'"'"')].value}"); \
+	GET_LEASE_TASK=$$(oc -n $(NAMESPACE) get taskruns --selector=tekton.dev/pipelineRun=$$PIPELINE_NAME,tekton.dev/pipelineTask=get-lease --no-headers -o custom-columns=":metadata.name"); \
 	\
-	echo "\\n\\n================================================================="; \
-	echo "🎉 Provisioning complete! Your board is ready."; \
-	echo "================================================================="; \
-	echo "Lease ID: $$JMP_LEASE_ID"; \
-	echo "\\nTo connect to this board directly, run:"; \
-	echo "export JMP_LEASE=$$JMP_LEASE_ID"; \
-	echo "jmp shell --client default"; \
-	echo "=================================================================\\n"; \
+	JMP_LEASE_ID=$$(oc -n $(NAMESPACE) get taskrun $$GET_LEASE_TASK -o jsonpath="{.status.results[?(@.name==\"jmp-lease-id\")].value}" 2>/dev/null || true); \
+	\
+	if [ -z "$$JMP_LEASE_ID" ]; then \
+	    JMP_LEASE_ID=$$(oc -n $(NAMESPACE) get taskrun $$GET_LEASE_TASK -o json | jq -r ".status.taskResults[] | select(.name == \"jmp-lease-id\") | .value" 2>/dev/null || true); \
+	fi; \
+	\
+	if [ -z "$$JMP_LEASE_ID" ]; then \
+	    JMP_LEASE_ID=$$(oc -n $(NAMESPACE) get taskrun $$GET_LEASE_TASK -o json | jq -r ".status.results[] | select(.name == \"jmp-lease-id\") | .value" 2>/dev/null || true); \
+	fi; \
+	\
+	if [ -n "$$JMP_LEASE_ID" ]; then \
+	    echo ""; \
+	    echo "================================================================="; \
+	    echo "🎉 Provisioning complete! Your board is ready."; \
+	    echo "================================================================="; \
+	    echo "Lease ID: $$JMP_LEASE_ID"; \
+	    echo ""; \
+	    echo "To access board via Jumpstarter, run:"; \
+	    echo "export JMP_LEASE=$$JMP_LEASE_ID"; \
+	    echo "jmp shell --client default"; \
+	    echo "# The board is usually powered off after flashing, you can turn it on:"; \
+	    echo "j power on"; \
+	    echo "# To access the serial console:"; \
+	    echo "j serial start-console"; \
+	    echo "================================================================="; \
+	else \
+	    echo ""; \
+	    echo "Warning: Could not extract lease ID. Please check the pipeline logs."; \
+	    echo "You might need to manually check the lease ID using:"; \
+	    echo "oc get taskrun $$GET_LEASE_TASK -o yaml"; \
+	    echo ""; \
+	fi \
 	'
 
 test-sample-apps:
