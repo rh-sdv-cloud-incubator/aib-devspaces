@@ -13,7 +13,7 @@ projects:
 components:
     - name: runtime
       container:
-          image: quay.io/bzlotnik/aib-base-dev:latest
+          image: quay.io/rh-sdv-cloud/aib-base-dev:latest
           mountSources: true
           args: ["tail", "-f", "/dev/null"]
           env:
@@ -21,6 +21,8 @@ components:
                 value: "true"
               - name: KUBECONFIG
                 value: "/home/user/.kube/config"
+              - name: JMP_CLIENT_CONFIG_HOME
+                value: "/home/user/.jumpstarter"
 
 commands:
     - id: build-container
@@ -70,6 +72,24 @@ commands:
           component: runtime
           commandLine: make -f Makefile.dev publish-image-reg
           workingDir: ${PROJECT_SOURCE}
+
+    - id: deploy-changes
+      exec:
+          component: runtime
+          commandLine: make -f Makefile.dev deploy-changes
+          workingDir: ${PROJECT_SOURCE}
+          group:
+              kind: run
+              isDefault: false
+
+    - id: build-all
+      exec:
+          component: runtime
+          commandLine: make -f Makefile.dev build-all
+          workingDir: ${PROJECT_SOURCE}
+          group:
+              kind: build
+              isDefault: true
 
     - id: provision-code
       composite:

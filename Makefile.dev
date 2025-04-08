@@ -43,7 +43,14 @@ metadata:
   namespace: $(NAMESPACE)
 spec:
   pipelineRef:
-    name: provision-pipeline
+    resolver: git
+    params:
+      - name: url
+        value: https://github.com/rh-sdv-cloud-incubator/tekton-tasks.git
+      - name: revision
+        value: main
+      - name: pathInRepo
+        value: pipelines/jumpstarter-flash/v0.0.1/jumpstarter-flash-pipeline.yaml
   params:
     - name: hw-target
       value: $(HW_TARGET)
@@ -61,6 +68,37 @@ spec:
     - name: shared-workspace
       persistentVolumeClaim:
         claimName: __AIB_PVC__
+  taskRunSpecs:
+    - pipelineTaskName: get-lease
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/jumpstarter-dev/jumpstarter-tekton-tasks.git
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: tasks/get-lease.yaml
+    - pipelineTaskName: provision-ti
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/rh-sdv-cloud-incubator/tekton-tasks.git
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: tasks/provision-ti/v0.0.1/provision-ti.yaml
+    - pipelineTaskName: release-lease
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/jumpstarter-dev/jumpstarter-tekton-tasks.git
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: tasks/release-lease.yaml
 endef
 export PIPELINERUN
 
@@ -130,10 +168,6 @@ test-image:
 	    echo "Error: No active PVC found for build $(NAME)."; \
 	    exit 1; \
 	fi; \
-	oc -n $(NAMESPACE) apply -f .tekton/jumpstarter-pipeline.yaml; \
-	oc -n $(NAMESPACE) apply -f .tekton/tasks/get-lease.yaml; \
-	oc -n $(NAMESPACE) apply -f .tekton/tasks/release-lease.yaml; \
-	oc -n $(NAMESPACE) apply -f .tekton/tasks/provision-ti.yaml; \
 	echo "$$PIPELINERUN" | sed "s/__AIB_PVC__/$$AIB_PVC/g" | oc -n $(NAMESPACE) create -f -; \
 	PIPELINE_NAME=$$(oc -n $(NAMESPACE) get pipelinerun --sort-by=.metadata.creationTimestamp -o name | tail -1); \
 	oc -n $(NAMESPACE) wait --for=condition=Succeeded "$$PIPELINE_NAME" --timeout=1200s || { \
@@ -166,6 +200,11 @@ publish-image-reg:
 build-app:
 	cmake .
 	make
+
+build-all: build-app build-container set-app-image build-image-ti
+
+deploy-changes:
+	./deploy-changes.sh
 
 clean:
 	make clean
