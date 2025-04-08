@@ -61,6 +61,8 @@ spec:
       value: /workspace/$(DISTRO)-$(TARGET).raw
     - name: client-name
       value: $(CLIENT_NAME)
+    - name: debug-mode
+      value: "true"
   workspaces:
     - name: jumpstarter-client-secret
       secret:
@@ -68,37 +70,6 @@ spec:
     - name: shared-workspace
       persistentVolumeClaim:
         claimName: __AIB_PVC__
-  taskRunSpecs:
-    - pipelineTaskName: get-lease
-      taskRef:
-        resolver: git
-        params:
-          - name: url
-            value: https://github.com/jumpstarter-dev/jumpstarter-tekton-tasks.git
-          - name: revision
-            value: main
-          - name: pathInRepo
-            value: tasks/get-lease.yaml
-    - pipelineTaskName: provision-ti
-      taskRef:
-        resolver: git
-        params:
-          - name: url
-            value: https://github.com/rh-sdv-cloud-incubator/tekton-tasks.git
-          - name: revision
-            value: main
-          - name: pathInRepo
-            value: tasks/provision-ti/v0.0.1/provision-ti.yaml
-    - pipelineTaskName: release-lease
-      taskRef:
-        resolver: git
-        params:
-          - name: url
-            value: https://github.com/jumpstarter-dev/jumpstarter-tekton-tasks.git
-          - name: revision
-            value: main
-          - name: pathInRepo
-            value: tasks/release-lease.yaml
 endef
 export PIPELINERUN
 
@@ -169,9 +140,10 @@ test-image:
 	    exit 1; \
 	fi; \
 	echo "$$PIPELINERUN" | sed "s/__AIB_PVC__/$$AIB_PVC/g" | oc -n $(NAMESPACE) create -f -; \
-	PIPELINE_NAME=$$(oc -n $(NAMESPACE) get pipelinerun --sort-by=.metadata.creationTimestamp -o name | tail -1); \
-	oc -n $(NAMESPACE) wait --for=condition=Succeeded "$$PIPELINE_NAME" --timeout=1200s || { \
-	    oc -n $(NAMESPACE) describe "$$PIPELINE_NAME"; \
+	PIPELINE_NAME=$$(oc -n $(NAMESPACE) get pipelinerun --sort-by=.metadata.creationTimestamp -o name | tail -1 | cut -d "/" -f 2); \
+	echo "Following logs for $$PIPELINE_NAME"; \
+	tkn pipelinerun logs $$PIPELINE_NAME -f -n $(NAMESPACE) || { \
+	    oc -n $(NAMESPACE) describe "pipelinerun/$$PIPELINE_NAME"; \
 	    exit 1; \
 	}'
 
