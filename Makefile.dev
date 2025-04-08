@@ -36,7 +36,7 @@ endef
 export BUILDCONFIG
 
 define PIPELINERUN
-apiVersion: tekton.dev/v1
+apiVersion: tekton.dev/v1beta1
 kind: PipelineRun
 metadata:
   generateName: jumpstarter-provision-$(NAME)-
@@ -45,33 +45,33 @@ spec:
   pipelineRef:
     resolver: git
     params:
-      - name: url
-        value: https://github.com/rh-sdv-cloud-incubator/tekton-tasks.git
-      - name: revision
-        value: main
-      - name: pathInRepo
-        value: pipelines/jumpstarter-flash/v0.0.1/jumpstarter-flash-pipeline.yaml
+    - name: url
+      value: https://github.com/rh-sdv-cloud-incubator/tekton-tasks.git
+    - name: revision
+      value: main
+    - name: pathInRepo
+      value: pipelines/jumpstarter-flash/v0.0.1/jumpstarter-flash-pipeline.yaml
   params:
-    - name: hw-target
-      value: $(HW_TARGET)
-    - name: exporter-labels
-      value:
-        - board-type=$(TARGET)
-    - name: image
-      value: /workspace/$(DISTRO)-$(TARGET).raw
-    - name: client-name
-      value: $(CLIENT_NAME)
-    - name: debug-mode
-      value: "true"
-    - name: skip-provision
-      value: "$(SKIP_PROVISION)"
+  - name: hw-target
+    value: $(HW_TARGET)
+  - name: exporter-labels
+    value:
+    - board-type=$(TARGET)
+  - name: image
+    value: /workspace/$(DISTRO)-$(TARGET).raw
+  - name: client-name
+    value: $(CLIENT_NAME)
+  - name: debug-mode
+    value: "true"
+  - name: skip-provision
+    value: "$(SKIP_PROVISION)"
   workspaces:
-    - name: jumpstarter-client-secret
-      secret:
-        secretName: jumpstarter-client
-    - name: shared-workspace
-      persistentVolumeClaim:
-        claimName: __AIB_PVC__
+  - name: jumpstarter-client-secret
+    secret:
+      secretName: jumpstarter-client
+  - name: shared-workspace
+    persistentVolumeClaim:
+      claimName: __AIB_PVC__
 endef
 export PIPELINERUN
 
@@ -138,31 +138,61 @@ flash-image:
 	set -e; \
 	AIB_PVC=$$(oc -n $(NAMESPACE) get pvc -l automotive.sdv.cloud.redhat.com/imagebuild-name=$(NAME) | grep -v "Terminating" | grep "Bound" | awk "{print \$$1}" | head -1); \
 	if [ -z "$$AIB_PVC" ]; then \
-	    echo "Error: No active PVC found for build $(NAME)."; \
+	    echo "Error: No active PVC found for build $(NAME)." >&2; \
 	    exit 1; \
 	fi; \
 	echo "$$PIPELINERUN" | sed "s/__AIB_PVC__/$$AIB_PVC/g" | oc -n $(NAMESPACE) create -f -; \
 	PIPELINE_NAME=$$(oc -n $(NAMESPACE) get pipelinerun --sort-by=.metadata.creationTimestamp -o name | tail -1 | cut -d "/" -f 2); \
 	echo "Following logs for $$PIPELINE_NAME"; \
-	tkn pipelinerun logs $$PIPELINE_NAME -f -n $(NAMESPACE); \
+	\
+	tkn pipelinerun logs $$PIPELINE_NAME -f -n $(NAMESPACE) || true; \
+	\
+	echo "Checking PipelineRun status..."; \
+	CURRENT_STATUS=$$(oc get pipelinerun $$PIPELINE_NAME -n $(NAMESPACE) -o jsonpath="{.status.conditions[0].reason}" 2>/dev/null || echo "Unknown"); \
+	\
+	if [ "$$CURRENT_STATUS" = "Failed" ] || [ "$$CURRENT_STATUS" = "Cancelled" ]; then \
+	    echo "" >&2; \
+	    echo "PipelineRun $$PIPELINE_NAME failed." >&2; \
+	    FINAL_MESSAGE=$$(oc get pipelinerun $$PIPELINE_NAME -n $(NAMESPACE) -o jsonpath="{.status.conditions[0].message}" 2>/dev/null || echo "No message available"); \
+	    echo "Status: $$CURRENT_STATUS" >&2; \
+	    echo "Message: $$FINAL_MESSAGE" >&2; \
+	    echo "" >&2; \
+	    echo "For more details, run:" >&2; \
+	    echo "oc describe pipelinerun $$PIPELINE_NAME -n $(NAMESPACE)" >&2; \
+	    exit 1; \
+	fi; \
+	\
+	echo "Waiting for PipelineRun $$PIPELINE_NAME to complete..."; \
+	if ! oc wait --for=condition=Succeeded=True pipelinerun/$$PIPELINE_NAME -n $(NAMESPACE) --timeout=30m; then \
+	    echo "" >&2; \
+	    echo "PipelineRun $$PIPELINE_NAME failed or timed out." >&2; \
+	    FINAL_STATUS=$$(oc get pipelinerun $$PIPELINE_NAME -n $(NAMESPACE) -o jsonpath="{.status.conditions[0].reason}" 2>/dev/null || echo "UnknownReason"); \
+	    FINAL_MESSAGE=$$(oc get pipelinerun $$PIPELINE_NAME -n $(NAMESPACE) -o jsonpath="{.status.conditions[0].message}" 2>/dev/null || echo "No message available"); \
+	    echo "Final Status: $$FINAL_STATUS" >&2; \
+	    echo "Message: $$FINAL_MESSAGE" >&2; \
+	    echo "" >&2; \
+	    echo "You might need to manually check the pipeline status using:" >&2; \
+	    echo "oc describe pipelinerun $$PIPELINE_NAME -n $(NAMESPACE)" >&2; \
+	    exit 1; \
+	fi; \
+	\
+	echo "PipelineRun $$PIPELINE_NAME Succeeded"; \
 	\
 	GET_LEASE_TASK=$$(oc -n $(NAMESPACE) get taskruns --selector=tekton.dev/pipelineRun=$$PIPELINE_NAME,tekton.dev/pipelineTask=get-lease --no-headers -o custom-columns=":metadata.name"); \
-	\
-	JMP_LEASE_ID=$$(oc -n $(NAMESPACE) get taskrun $$GET_LEASE_TASK -o jsonpath="{.status.results[?(@.name==\"jmp-lease-id\")].value}" 2>/dev/null || true); \
-	\
+	JMP_LEASE_ID="unknown"; \
+	JMP_LEASE_ID=$$(oc -n $(NAMESPACE) get taskrun $$GET_LEASE_TASK -o jsonpath="{.status.results[?(@.name==\"jmp-lease-id\")].value}" 2>/dev/null); \
 	if [ -z "$$JMP_LEASE_ID" ]; then \
-	    JMP_LEASE_ID=$$(oc -n $(NAMESPACE) get taskrun $$GET_LEASE_TASK -o json | jq -r ".status.taskResults[] | select(.name == \"jmp-lease-id\") | .value" 2>/dev/null || true); \
+	    JMP_LEASE_ID=$$(oc -n $(NAMESPACE) get taskrun $$GET_LEASE_TASK -o json | jq -r ".status.taskResults[] | select(.name == \"jmp-lease-id\") | .value" 2>/dev/null); \
+	fi; \
+	if [ -z "$$JMP_LEASE_ID" ]; then \
+	    JMP_LEASE_ID=$$(oc -n $(NAMESPACE) get taskrun $$GET_LEASE_TASK -o json | jq -r ".status.results[] | select(.name == \"jmp-lease-id\") | .value" 2>/dev/null); \
 	fi; \
 	\
-	if [ -z "$$JMP_LEASE_ID" ]; then \
-	    JMP_LEASE_ID=$$(oc -n $(NAMESPACE) get taskrun $$GET_LEASE_TASK -o json | jq -r ".status.results[] | select(.name == \"jmp-lease-id\") | .value" 2>/dev/null || true); \
-	fi; \
-	\
-	if [ -n "$$JMP_LEASE_ID" ]; then \
-	    echo ""; \
-	    echo "================================================================="; \
-	    echo "🎉 Provisioning complete! Your board is ready."; \
-	    echo "================================================================="; \
+	echo ""; \
+	echo "================================================================="; \
+	echo "🎉 Flashing complete!"; \
+	echo "================================================================="; \
+	if [ -n "$$JMP_LEASE_ID" ] && [ "$$JMP_LEASE_ID" != "null" ]; then \
 	    echo "Lease ID: $$JMP_LEASE_ID"; \
 	    echo ""; \
 	    echo "To access board via Jumpstarter, run:"; \
@@ -172,14 +202,11 @@ flash-image:
 	    echo "j power on"; \
 	    echo "# To access the serial console:"; \
 	    echo "j serial start-console"; \
-	    echo "================================================================="; \
 	else \
-	    echo ""; \
-	    echo "Warning: Could not extract lease ID. Please check the pipeline logs."; \
-	    echo "You might need to manually check the lease ID using:"; \
-	    echo "oc get taskrun $$GET_LEASE_TASK -o yaml"; \
-	    echo ""; \
-	fi \
+	    echo "Warning: Could not retrieve Lease ID, but pipeline succeeded"; \
+	    echo "You may need to find the lease ID manually if needed"; \
+	fi; \
+	echo "================================================================="; \
 	'
 
 test-sample-apps:
