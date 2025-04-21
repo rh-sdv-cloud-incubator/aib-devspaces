@@ -30,6 +30,7 @@ spec:
       dockerfilePath: Dockerfile
   source:
     type: Binary
+    binary: {}
   triggers:
     - type: ConfigChange
 endef
@@ -235,10 +236,12 @@ build-app:
 	cmake .
 	make
 
-build-all: build-app build-container set-app-image build-image-ti
+build-all: build-app create-build-config build-container set-app-image build-image-ti
 
 deploy-changes:
 	./deploy-changes.sh
 
 clean:
 	make clean
+	echo "removing image builds"
+    rm -rf output/
