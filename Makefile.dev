@@ -243,5 +243,5 @@ deploy-changes:
 
 clean:
 	make clean
-	echo "removing image builds"
-    rm -rf output/
+	echo "removing output directory..."
+	rm -rf output/
