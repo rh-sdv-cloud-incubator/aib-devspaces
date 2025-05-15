@@ -132,7 +132,8 @@ build-image-ti:
 	  --target $(TARGET) \
 	  --mode package \
 	  --wait \
-	  --define use_debug=true
+	  --define use_debug=true \
+	  --follow
 
 flash-image:
 	@bash -c ' \
