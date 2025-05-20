@@ -66,21 +66,6 @@ content:
         [Install]
         WantedBy=multi-user.target
 
-    - path: /usr/lib/systemd/system/caib-install.service
-      text: |
-        [Unit]
-        Description=Make caib executable
-        After=network-online.target
-        ConditionPathExists=/caib
-
-        [Service]
-        Type=oneshot
-        ExecStartPost=/usr/bin/chmod +x /usr/local/bin/caib
-        RemainAfterExit=true
-
-        [Install]
-        WantedBy=multi-user.target
-
     - path: /setup-jumpstarter.sh
       text: |
         #!/bin/bash
@@ -102,13 +87,16 @@ content:
 
         [Install]
         WantedBy=multi-user.target
+  
+  chmod_files:
+    - path: /usr/local/bin/caib
+      mode: "0755"
 
   systemd:
     enabled_services:
       - tkn-install.service
       - oc-install.service
       - jumpstarter-setup.service
-      - caib-install.service
 
 auth:
   root_password: $6$xoLqEUz0cGGJRx01$H3H/bFm0myJPULNMtbSsOFd/2BnHqHkMD92Sfxd.EKM9hXTWSmELG8cf205l6dktomuTcgKGGtGDgtvHVXSWU.
