@@ -97,6 +97,9 @@ content:
       - tkn-install.service
       - oc-install.service
       - jumpstarter-setup.service
+      
+image:
+  image_size: 20 GiB
 
 auth:
   root_password: $6$xoLqEUz0cGGJRx01$H3H/bFm0myJPULNMtbSsOFd/2BnHqHkMD92Sfxd.EKM9hXTWSmELG8cf205l6dktomuTcgKGGtGDgtvHVXSWU.
