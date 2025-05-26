@@ -1,0 +1,71 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+            {
+                    "label": "Git Diff",
+                    "type": "ssh-shell",
+                    "host": "ec2",
+                    "command": "git diff",
+            },
+            {
+                    "label": "Build app",
+                    "type": "ssh-shell",
+                    "host": "ec2",
+                    "command": "make -f Makefile.dev build-app",
+            },
+            {
+                    "label": "Build container",
+                    "type": "ssh-shell",
+                    "host": "ec2",
+                    "command": "make -f Makefile.dev build-container",
+            },
+            {
+                    "label": "Set app image",
+                    "type": "ssh-shell",
+                    "host": "ec2",
+                    "command": "make -f Makefile.dev set-app-image",
+            },
+            {
+                    "label": "Build TI image",
+                    "type": "ssh-shell",
+                    "host": "ec2",
+                    "command": "make -f Makefile.dev build-image-ti",
+            },
+            {
+                    "label": "Flash image",
+                    "type": "ssh-shell",
+                    "host": "ec2",
+                    "command": "make -f Makefile.dev flash-image",
+            },
+            {
+                    "label": "Test sample apps",
+                    "type": "ssh-shell",
+                    "host": "ec2",
+                    "command": "make -f Makefile.dev test-sample-apps",
+            },
+            {
+                    "label": "Publish image",
+                    "type": "ssh-shell",
+                    "host": "ec2",
+                    "command": "make -f Makefile.dev publish-image-reg",
+            },
+            {
+                    "label": "Deploy changes",
+                    "type": "ssh-shell",
+                    "host": "ec2",
+                    "command": "make -f Makefile.dev deploy-changes",
+            },
+            {
+                    "label": "Build all",
+                    "type": "ssh-shell",
+                    "host": "ec2",
+                    "command": "make -f Makefile.dev build-all",
+            },
+            {
+                    "label": "Clean",
+                    "type": "ssh-shell",
+                    "host": "ec2",
+                    "command": "make -f Makefile.dev clean",
+            }
+    ]
+}
