@@ -1,0 +1,128 @@
+name: sampale-apps-dev-image
+
+content: 
+  repos:
+    - id: copr-sample-apps
+      baseurl: https://download.copr.fedorainfracloud.org/results/alexl/cs9-sample-images/centos-stream-9-$arch/
+  rpms:
+    - auto-apps
+    - vsomeip3
+    - vsomeip3-devel
+    - vsomeip3-routingmanager
+    - dlt-daemon
+    - boost-system
+    - boost-thread
+    - boost-log
+    - boost-chrono
+    - boost-date-time
+    - boost-atomic
+    - boost-filesystem
+    - boost-regex
+    - boost-devel
+    - vim
+    - git
+    - make
+    - cmake
+    - gdb
+    - gcc-c++
+    - openssh-server
+    - iproute
+    - dnf
+    - tar
+    - osbuild
+    - python3.12
+    - python3.12-pip
+    - wget
+    - podman
+    - automotive-image-builder
+
+  add_files:
+    - path: /oc-arm64-rhel9.tar.gz
+      url: https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable-4.18/openshift-client-linux-arm64-rhel9.tar.gz
+    
+    - path: /tkn.rpm
+      url: https://github.com/tektoncd/cli/releases/download/v0.40.0/tektoncd-cli-0.40.0_Linux-ARM64.rpm
+
+    - path: /usr/local/bin/caib
+      url: https://github.com/rh-sdv-cloud-incubator/automotive-dev-operator/releases/download/v0.0.7/caib-v0.0.7-arm64
+
+    - path: /usr/lib/systemd/system/tkn-install.service
+      text: |
+        [Unit]
+        Description=Extract Tekton CLI tarball
+        After=network-online.target
+        ConditionPathExists=/tkn.rpm
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/bin/dnf install -y /tkn.rpm
+        RemainAfterExit=true
+
+        [Install]
+        WantedBy=multi-user.target
+
+    - path: /usr/lib/systemd/system/oc-install.service
+      text: |
+        [Unit]
+        Description=Download and extract OpenShift CLI (oc + kubectl)
+        After=network-online.target
+        ConditionPathExists=/oc-arm64-rhel9.tar.gz
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/bin/tar -xzf /oc-arm64-rhel9.tar.gz -C /usr/local/bin
+        ExecStartPost=/usr/bin/chmod +x /usr/local/bin/oc /usr/local/bin/kubectl
+        RemainAfterExit=true
+
+        [Install]
+        WantedBy=multi-user.target
+        
+    - path: /usr/lib/systemd/system/repo-clone.service
+      text: |
+        [Unit]
+        Description=Clone multiple Git repositories
+        After=network-online.target
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/bin/git clone https://github.com/rh-sdv-cloud-incubator/aib-devspaces.git /home/ec2-user/aib-devspaces
+        RemainAfterExit=true
+
+        [Install]
+        WantedBy=multi-user.target
+
+    - path: /setup-jumpstarter.sh
+      text: |
+        #!/bin/bash
+
+        set -e
+        pip3.12 install --extra-index-url https://pkg.jumpstarter.dev/simple jumpstarter-all
+
+    - path: /usr/lib/systemd/system/jumpstarter-setup.service
+      text: |
+        [Unit]
+        Description=Setup Jumpstarter Python Environment
+        After=network-online.target
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/bin/chmod +x /setup-jumpstarter.sh
+        ExecStartPost=/setup-jumpstarter.sh
+        RemainAfterExit=true
+
+        [Install]
+        WantedBy=multi-user.target
+
+  chmod_files:
+    - path: /usr/local/bin/caib
+      mode: "0755"
+
+  systemd:
+    enabled_services:
+      - tkn-install.service
+      - oc-install.service
+      - jumpstarter-setup.service
+      - repo-clone.service
+
+auth:
+  root_password: $6$xoLqEUz0cGGJRx01$H3H/bFm0myJPULNMtbSsOFd/2BnHqHkMD92Sfxd.EKM9hXTWSmELG8cf205l6dktomuTcgKGGtGDgtvHVXSWU.
