@@ -242,6 +242,14 @@ build-all: build-app create-build-config build-container set-app-image build-ima
 deploy-changes:
 	./deploy-changes.sh
 
+setup-deps:
+	@echo "Enabling required repositories..."
+	sudo dnf install -y epel-release dnf-plugins-core
+	sudo curl -o /etc/yum.repos.d/alexl-cs9-sample-images.repo https://download.copr.fedorainfracloud.org/results/alexl/cs9-sample-images/centos-stream-9-aarch64/08738715-vsomeip3/alexl-cs9-sample-images-centos-stream-9-aarch64.repo
+	@echo "Installing required packages..."
+	sudo dnf install -y vsomeip3 vsomeip3-devel boost boost-devel
+	@echo "vsomeip setup complete!"
+
 clean:
 	make clean
 	echo "removing output directory..."
